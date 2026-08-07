@@ -1,6 +1,6 @@
 # ScoreTranslate
 
-[简体中文](README.md) | English
+[简体中文](README.md) | English · [Website](https://tpnet.github.io/ScoreTranslate/)
 
 A local sheet-music format converter that runs as a web app: pick a score file, convert it to another format, download the result. Everything happens on your own machine — no file is ever uploaded to an external service.
 

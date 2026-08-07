@@ -1,6 +1,6 @@
 # ScoreTranslate
 
-简体中文 | [English](README.en.md)
+简体中文 | [English](README.en.md) · [官网](https://tpnet.github.io/ScoreTranslate/)
 
 本地乐谱格式转换 Web 工具：选择乐谱文件，转换为其它格式并下载。全程在本机完成，文件不上传到任何外部服务。
 
