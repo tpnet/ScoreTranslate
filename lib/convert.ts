@@ -23,6 +23,19 @@ export type OutputExt = (typeof OUTPUT_EXTS)[number];
 const GP_INPUT_EXTS = ["gp", "gpx", "gp3", "gp4", "gp5"];
 const XML_TARGETS = ["musicxml", "xml", "mxl"];
 
+// 主版本号，null 表示没装（或路径不对）。项目依赖 MuseScore 4：--unroll-repeats
+// 等开关是 4 才有的，mscz 也按 4 的格式写出。
+// 成功结果缓存，失败不缓存——装好之后刷新页面即可生效，不用重启服务
+let mscoreMajorCache: number | undefined;
+export async function mscoreMajor(): Promise<number | null> {
+  if (mscoreMajorCache !== undefined) return mscoreMajorCache;
+  const major = await run(MSCORE, ["-v"], { timeout: 10_000 })
+    .then((r) => Number(r.stdout.match(/(\d+)\./)?.[1]) || null)
+    .catch(() => null);
+  if (major !== null) mscoreMajorCache = major;
+  return major;
+}
+
 export interface ConvertResult {
   data: Uint8Array;
   filename: string;
