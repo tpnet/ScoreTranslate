@@ -8,11 +8,11 @@
 
 | 输入 | 输出 |
 | --- | --- |
-| `.mid` `.midi` `.gp` `.gpx` `.gp3` `.gp4` `.gp5` `.mxl` `.musicxml` `.xml` | `.mid` `.musicxml` `.xml` `.mxl` `.gp` `.gp5` `.mscz` `.pdf` `.png` `.png` 长图 |
+| `.mid` `.midi` `.gp` `.gpx` `.gp3` `.gp4` `.gp5` `.mxl` `.musicxml` `.xml` `.json` | `.mid` `.musicxml` `.xml` `.mxl` `.gp` `.gp5` `.json` `.mscz` `.pdf` `.png` `.png` 长图 |
 
-单文件上限 50MB。PNG 按页导出，多页时自动打包成 zip；「PNG 长图」把所有页纵向拼成单张图。
+单文件上限 50MB。PNG 按页导出，多页时自动打包成 zip；「PNG 长图」把所有页纵向拼成单张图。`.json` 是 [alphaTab](https://alphatab.net) 的乐谱模型序列化格式，便于在网页端直接渲染或做二次处理。
 
-部分目标格式带导出选项：PNG 的 DPI 与裁边、PDF 的纸张与缩放、MIDI 的展开反复、MusicXML/PDF/PNG 的谱表类型（六线谱 / 五线谱）。
+部分目标格式带导出选项：PNG 的 DPI 与裁边、PDF 的纸张与缩放、MIDI 的展开反复、MusicXML/PDF/PNG 的谱表类型（六线谱 / 五线谱）、弹唱谱的歌词并轨。多轨谱还可以只导出选中的音轨，对全部目标格式生效。
 
 ## 环境准备
 
@@ -42,7 +42,13 @@ curl -O -J -F "file=@score.gp5" -F "target=pdf" http://localhost:3000/api/conver
 
 成功返回文件流，文件名在 `Content-Disposition` 与 `X-Filename` 响应头里；失败返回 JSON `{"error": "..."}`。
 
-导出选项作为可选表单字段传入，非法值直接忽略：`dpi`（50–1200）、`trim`（0–500 像素边距）、`scale`（50–200）、`paper`（`a4` / `letter`）、`staffMode`（`tab` / `standard`）、`unrollRepeats`（`1`）。
+导出选项作为可选表单字段传入，非法值直接忽略：`dpi`（50–1200）、`trim`（0–500 像素边距）、`scale`（50–200）、`paper`（`a4` / `letter`）、`staffMode`（`tab` / `standard`）、`unrollRepeats`（`1`）、`mergeLyrics`（`1`，把人声轨歌词按时间对齐并入其他音轨）、`tracks`（逗号分隔的音轨下标，只导出这些轨，缺省导出全部）。
+
+`tracks` 的下标由 `POST /api/tracks` 给出，同样接收 `file` 字段，返回 `{"tracks": ["音轨名", ...]}`，数组顺序即下标：
+
+```bash
+curl -F "file=@score.gp5" http://localhost:3000/api/tracks
+```
 
 ## 已知限制
 
@@ -54,10 +60,11 @@ curl -O -J -F "file=@score.gp5" -F "target=pdf" http://localhost:3000/api/conver
 
 ## 结构
 
-- `lib/convert.ts` — 转换核心与路由；`.gp` / `.gp5` 目标经 MusicXML 桥接后导出
+- `lib/convert.ts` — 转换核心与路由；Guitar Pro 输入直接解析，其余先经 MusicXML 桥接
 - `lib/gp5-writer.ts` — GP5 二进制写出器（含弦品指派算法）
 - `lib/gp-to-musicxml.ts` — Guitar Pro 模型 → MusicXML 序列化器（保留 TAB 谱表与弦品信息）
 - `app/api/convert/route.ts` — 转换接口，负责校验与文件流响应
+- `app/api/tracks/route.ts` — 音轨名列表接口，供前端勾选导出哪些轨
 - `app/page.tsx` — 上传 / 选择目标格式 / 下载的单页界面
 
 ## 许可证
