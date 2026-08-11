@@ -19,6 +19,37 @@ const TYPE_NAMES: Record<number, string> = {
 const esc = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
+// DynamicValue 枚举下标 → MusicXML dynamics 元素名（顺序与 alphaTab 枚举一致）
+const DYNAMIC_NAMES = [
+  "ppp", "pp", "p", "mp", "mf", "f", "ff", "fff", "pppp", "ppppp", "pppppp",
+  "ffff", "fffff", "ffffff", "sf", "sfp", "sfpp", "fp", "rf", "rfz", "sfz",
+  "sffz", "fz", "n", "pf", "sfzp",
+];
+const LEFT_FINGERS = ["T", "1", "2", "3", "4"]; // Fingers 枚举 0=Thumb..4=Little
+const PLUCK_FINGERS = ["p", "i", "m", "a", "c"];
+const TREMOLO_MARKS: Record<number, number> = { 8: 1, 16: 2, 32: 3 };
+
+const words = (text: string, italic = false) =>
+  `<direction placement="above"><direction-type><words${italic ? ' font-style="italic"' : ""}>${text}</words></direction-type></direction>`;
+const wedge = (type: string) =>
+  `<direction><direction-type><wedge type="${type}"/></direction-type></direction>`;
+
+// 推弦：不看 bendType，直接由点列推导——起始值>0 写预推，有上推写峰值，
+// 末值低于峰值写释放。bendPoint.value 单位是 1/4 音，bend-alter 单位是半音
+function bendXml(note: model.Note): string {
+  const pts = note.bendPoints;
+  if (!pts || pts.length === 0) return "";
+  const semis = (v: number) => String(v / 2);
+  const first = pts[0].value;
+  const peak = Math.max(...pts.map((p) => p.value));
+  const last = pts[pts.length - 1].value;
+  let xml = "";
+  if (first > 0) xml += `<bend><bend-alter>${semis(first)}</bend-alter><pre-bend/></bend>`;
+  if (peak > first) xml += `<bend><bend-alter>${semis(peak)}</bend-alter></bend>`;
+  if (last < peak) xml += `<bend><bend-alter>${semis(last)}</bend-alter><release/></bend>`;
+  return xml;
+}
+
 function pitchXml(midi: number, useFlats: boolean, tag = "pitch"): string {
   const pc = ((midi % 12) + 12) % 12;
   const octave = Math.floor(midi / 12) - 1;
@@ -75,13 +106,90 @@ function noteXml(
   const notations: string[] = [];
   if (note.isTieDestination) notations.push('<tied type="stop"/>');
   if (note.isTieOrigin) notations.push('<tied type="start"/>');
+  // 并发连线/滑音按弦编号区分（击勾弦和滑音的两端总在同一根弦上）
+  const lineNo = stringed && note.string >= 1 ? stringCount - note.string + 1 : 1;
+  // 滑音（shift/legato）：起点写 start，终点凭 slideOrigin 写 stop
+  if (note.slideOrigin && ((note.slideOrigin.slideOutType as number) === 1 || (note.slideOrigin.slideOutType as number) === 2)) {
+    notations.push(`<slide type="stop" number="${lineNo}"/>`);
+  }
+  if ((note.slideOutType as number) === 1 || (note.slideOutType as number) === 2) {
+    notations.push(`<slide type="start" number="${lineNo}"/>`);
+  }
+  // MuseScore 4 导入时忽略 hammer-on/pull-off 元素，只认 slur 弧线；
+  // 因此连线用 slur 写出，hammer-on/pull-off 元素照写供 Guitar Pro 等识别
+  if (note.isHammerPullOrigin && note.hammerPullDestination) {
+    notations.push(`<slur type="start" number="${lineNo}"/>`);
+  }
+  if (note.isHammerPullDestination && note.hammerPullOrigin) {
+    notations.push(`<slur type="stop" number="${lineNo}"/>`);
+  }
+
+  const first = !isChord; // beat 级技巧只写在和弦首音上，避免重复
+
+  const tech: string[] = [];
   if (stringed && note.string >= 1 && note.fret >= 0) {
     // MusicXML 的 1 弦是最高音弦，alphaTab 的 1 弦是最低音弦，需换算
-    notations.push(
-      `<technical><string>${stringCount - note.string + 1}</string><fret>${note.fret}</fret></technical>`,
-    );
+    tech.push(`<string>${stringCount - note.string + 1}</string><fret>${note.fret}</fret>`);
+  }
+  // 击弦/勾弦：GP 只有一个 hammer/pull 标记，按终点品位高低区分
+  if (note.isHammerPullOrigin && note.hammerPullDestination) {
+    const tag = note.hammerPullDestination.fret > note.fret ? "hammer-on" : "pull-off";
+    tech.push(`<${tag} type="start" number="1">${tag === "hammer-on" ? "H" : "P"}</${tag}>`);
+  }
+  if (note.isHammerPullDestination && note.hammerPullOrigin) {
+    const tag = note.fret > note.hammerPullOrigin.fret ? "hammer-on" : "pull-off";
+    tech.push(`<${tag} type="stop" number="1"/>`);
+  }
+  tech.push(bendXml(note));
+  if ((note.harmonicType as number) !== 0) {
+    tech.push(`<harmonic>${(note.harmonicType as number) === 1 ? "<natural/>" : "<artificial/>"}</harmonic>`);
+  }
+  if (note.isLeftHandTapped) tech.push('<tap hand="left">T</tap>');
+  if (first && beat.tap) tech.push("<tap/>");
+  if (first && beat.pop) tech.push("<snap-pizzicato/>");
+  if (first && (beat.golpe as number) !== 0) tech.push("<golpe/>");
+  if (first && (beat.pickStroke as number) === 2) tech.push("<down-bow/>");
+  if (first && (beat.pickStroke as number) === 1) tech.push("<up-bow/>");
+  if ((note.leftHandFinger as number) >= 0) tech.push(`<fingering>${LEFT_FINGERS[note.leftHandFinger as number]}</fingering>`);
+  if ((note.rightHandFinger as number) >= 0) tech.push(`<pluck>${PLUCK_FINGERS[note.rightHandFinger as number]}</pluck>`);
+  const techXml = tech.join("");
+  if (techXml) notations.push(`<technical>${techXml}</technical>`);
+
+  const orns: string[] = [];
+  if (note.isTrill) orns.push("<trill-mark/>");
+  if ((note.vibrato as number) !== 0 || (first && (beat.vibrato as number) !== 0)) {
+    orns.push('<wavy-line type="start"/><wavy-line type="stop"/>');
+  }
+  if (first && beat.isTremolo && beat.tremoloSpeed != null) {
+    orns.push(`<tremolo type="single">${TREMOLO_MARKS[beat.tremoloSpeed as number] ?? 3}</tremolo>`);
+  }
+  if (orns.length) notations.push(`<ornaments>${orns.join("")}</ornaments>`);
+
+  const artics: string[] = [];
+  if (note.isStaccato) artics.push("<staccato/>");
+  if ((note.accentuated as number) === 1) artics.push("<accent/>");
+  if ((note.accentuated as number) === 2) artics.push("<strong-accent/>");
+  if ((note.accentuated as number) === 3) artics.push("<tenuto/>");
+  // 滑入：下方滑入 → scoop，上方滑入 → plop
+  if ((note.slideInType as number) === 1) artics.push("<scoop/>");
+  if ((note.slideInType as number) === 2) artics.push("<plop/>");
+  // 无目标音的滑出/拨片滑弦：向上 → doit，向下 → falloff
+  const so = note.slideOutType as number;
+  if (so === 3 || so === 6) artics.push("<doit/>");
+  if (so === 4 || so === 5) artics.push("<falloff/>");
+  if (artics.length) notations.push(`<articulations>${artics.join("")}</articulations>`);
+
+  // 扫弦/琶音：GP 是 beat 级标记，MusicXML 要求写在和弦每个音上
+  if ((beat.brushType as number) !== 0) {
+    notations.push(`<arpeggiate direction="${(beat.brushType as number) % 2 === 1 ? "up" : "down"}"/>`);
   }
   if (notations.length) xml += `<notations>${notations.join("")}</notations>`;
+  // 歌词是 beat 级，写在和弦首音上
+  if (first && beat.lyrics) {
+    beat.lyrics.forEach((line, li) => {
+      if (line) xml += `<lyric number="${li + 1}"><syllabic>single</syllabic><text>${esc(line)}</text></lyric>`;
+    });
+  }
   return xml + "</note>";
 }
 
@@ -99,8 +207,10 @@ function measureXml(
   staff: model.Staff,
   barIndex: number,
   partFirstBar: boolean,
+  partLastBar: boolean,
   useFlats: boolean,
   tabStaff: boolean,
+  state: { dyn: number; wedge: number },
 ): string {
   const bar = staff.bars[barIndex];
   const mb = bar.masterBar;
@@ -172,13 +282,48 @@ function measureXml(
   }
   voices.forEach((v, vi) => {
     let written = 0;
+    // 闷音/延音按连续段标记：段首写一次文字（GP 是逐音符标记，谱面惯例是段首标注）
+    let prevPalmMute = false;
+    let prevLetRing = false;
     for (const beat of v.beats) {
       const grace = (beat.graceType as number) !== 0;
       const ticks = beatTicks(beat);
       if (beat.isRest) {
         if (grace) continue;
+        prevPalmMute = false;
+        prevLetRing = false;
         xml += restXml(beat, vi + 1, ticks);
       } else {
+        const palmMute = beat.notes.some((n) => n.isPalmMute);
+        if (palmMute && !prevPalmMute) xml += words("P.M.", true);
+        prevPalmMute = palmMute;
+        const letRing = beat.notes.some((n) => n.isLetRing);
+        if (letRing && !prevLetRing) xml += words("let ring", true);
+        prevLetRing = letRing;
+        if (beat.slap) xml += words("slap");
+        if ((beat.rasgueado as number) !== 0) xml += words("rasg.", true);
+        if ((beat.whammyBarType as number) !== 0) xml += words("w/bar");
+        if (beat.text) xml += words(esc(beat.text));
+        // 力度与渐强渐弱只在声部 1 写一份，避免多声部重复标记
+        if (vi === 0) {
+          const dyn = beat.dynamics as number;
+          if (dyn !== state.dyn) {
+            if (state.dyn >= 0 && DYNAMIC_NAMES[dyn]) {
+              xml += `<direction placement="below"><direction-type><dynamics><${DYNAMIC_NAMES[dyn]}/></dynamics></direction-type></direction>`;
+            }
+            state.dyn = dyn;
+          }
+          // 渐强/渐弱跨小节跟踪（state.wedge），连续段只写一条楔形线
+          const cres = beat.crescendo as number;
+          if (cres !== state.wedge) {
+            if (state.wedge) xml += wedge("stop");
+            if (cres) xml += wedge(cres === 1 ? "crescendo" : "diminuendo");
+            state.wedge = cres;
+          }
+        }
+        // fade in/out/swell：围绕该拍写一对楔形线
+        const fade = beat.fade as number;
+        if (fade) xml += wedge(fade === 2 ? "diminuendo" : "crescendo");
         beat.notes.forEach((n, ni) => {
           xml += noteXml(n, beat, {
             isChord: ni > 0,
@@ -189,8 +334,13 @@ function measureXml(
             ticks,
           });
         });
+        if (fade) xml += wedge("stop");
       }
       if (!grace) written += ticks;
+    }
+    if (vi === 0 && partLastBar && state.wedge) {
+      xml += wedge("stop");
+      state.wedge = 0;
     }
     if (vi < voices.length - 1 && written > 0) {
       xml += `<backup><duration>${written}</duration></backup>`;
@@ -236,8 +386,10 @@ export function scoreToMusicXml(score: model.Score, staffMode: "tab" | "standard
   const body = parts
     .map(({ id, staff }) => {
       let xml = `<part id="${id}">`;
+      // 力度与渐强渐弱跨小节跟踪，只在变化时写记号
+      const state = { dyn: -1, wedge: 0 };
       for (let i = 0; i < staff.bars.length; i++) {
-        xml += measureXml(staff, i, i === 0, useFlats, staffMode === "tab");
+        xml += measureXml(staff, i, i === 0, i === staff.bars.length - 1, useFlats, staffMode === "tab", state);
       }
       return xml + "</part>";
     })

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -23,7 +23,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 
-const ACCEPT = ".mid,.midi,.gp,.gpx,.gp3,.gp4,.gp5,.mxl,.musicxml,.xml";
+const ACCEPT = ".mid,.midi,.gp,.gpx,.gp3,.gp4,.gp5,.mxl,.musicxml,.xml,.json";
 
 const TARGETS = [
   { value: "mid", label: "MIDI (.mid)" },
@@ -32,6 +32,7 @@ const TARGETS = [
   { value: "mxl", label: "MusicXML 压缩 (.mxl)" },
   { value: "gp", label: "Guitar Pro (.gp，GP7/8 可打开)" },
   { value: "gp5", label: "Guitar Pro 5 (.gp5，GP5 及以上可打开)" },
+  { value: "json", label: "alphaTab JSON (.json)" },
   { value: "mscz", label: "MuseScore (.mscz)" },
   { value: "pdf", label: "PDF (.pdf)" },
   { value: "png", label: "PNG 图片（多页自动打包 zip）" },
@@ -42,13 +43,15 @@ const GP_INPUTS = ["gp", "gpx", "gp3", "gp4", "gp5"];
 const XML_TARGETS = ["musicxml", "xml", "mxl"];
 // 各目标格式提交时携带的配置字段；不在表里的格式无配置项
 const OPT_KEYS: Record<string, string[]> = {
-  png: ["dpi", "trim", "staffMode"],
-  "png-long": ["dpi", "trim", "staffMode"],
+  png: ["dpi", "trim", "staffMode", "mergeLyrics"],
+  "png-long": ["dpi", "trim", "staffMode", "mergeLyrics"],
   mid: ["unrollRepeats"],
-  pdf: ["paper", "scale", "staffMode"],
-  musicxml: ["staffMode"],
-  xml: ["staffMode"],
-  mxl: ["staffMode"],
+  pdf: ["paper", "scale", "staffMode", "mergeLyrics"],
+  musicxml: ["staffMode", "mergeLyrics"],
+  xml: ["staffMode", "mergeLyrics"],
+  mxl: ["staffMode", "mergeLyrics"],
+  gp: ["mergeLyrics"],
+  gp5: ["mergeLyrics"],
 };
 
 // 表单行：左侧固定标签 + 右侧控件
@@ -67,11 +70,34 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [dragging, setDragging] = useState(false);
-  const [opts, setOpts] = useState<Record<string, string>>({});
+  const [opts, setOpts] = useState<Record<string, string>>({ mergeLyrics: "1" });
+  const [tracks, setTracks] = useState<string[] | null>(null);
+  const [sel, setSel] = useState<number[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const inputExt = file?.name.split(".").pop()?.toLowerCase() ?? "";
   const isGpInput = GP_INPUTS.includes(inputExt);
+
+  // 选定文件后读音轨名（非 gp 输入要跑一趟 MuseScore，所以只在换文件时读一次）。
+  // 读取失败不报错，只是不显示勾选框，转换时导出全部音轨
+  useEffect(() => {
+    if (!file) return;
+    let stale = false;
+    const form = new FormData();
+    form.append("file", file);
+    fetch("/api/tracks", { method: "POST", body: form })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body: { tracks?: string[] } | null) => {
+        if (stale || !body?.tracks) return;
+        setTracks(body.tracks);
+        setSel(body.tracks.map((_, i) => i));
+      })
+      .catch(() => {});
+    return () => {
+      stale = true;
+      setTracks(null);
+    };
+  }, [file]);
 
   const setOpt = (key: string) => (value: string) =>
     setOpts((o) => ({ ...o, [key]: value }));
@@ -93,6 +119,8 @@ export default function Home() {
       for (const key of OPT_KEYS[target] ?? []) {
         if (opts[key]) form.append(key, opts[key]);
       }
+      // 全选等同缺省，不用传
+      if (tracks && sel.length < tracks.length) form.append("tracks", sel.join(","));
       const res = await fetch("/api/convert", { method: "POST", body: form });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
@@ -113,6 +141,7 @@ export default function Home() {
   };
 
   const hasOpts = (OPT_KEYS[target] ?? []).length > 0;
+  const trackList = tracks && tracks.length > 1 ? tracks : null;
 
   return (
     <main className="min-h-screen flex items-center justify-center p-6">
@@ -121,7 +150,7 @@ export default function Home() {
           <CardTitle>乐谱格式转换</CardTitle>
           <CardDescription>
             支持 MIDI、Guitar Pro（gp / gpx / gp3-5）、MusicXML（mxl / musicxml /
-            xml）互转，并可导出 PDF 与图片。
+            xml）、alphaTab JSON 互转，并可导出 PDF 与图片。
           </CardDescription>
         </CardHeader>
 
@@ -174,7 +203,7 @@ export default function Home() {
             </Select>
           </Row>
 
-          {hasOpts && (
+          {(hasOpts || trackList) && (
             <div className="ml-3 flex flex-col gap-3 border-l-2 pl-4">
               {(target === "png" || target === "png-long") && (
                 <>
@@ -265,6 +294,23 @@ export default function Home() {
                 </Row>
               )}
 
+              {(OPT_KEYS[target] ?? []).includes("mergeLyrics") && (
+                <Row label="弹唱谱">
+                  <Label className="font-normal">
+                    <Checkbox
+                      checked={opts.mergeLyrics === "1"}
+                      onCheckedChange={(checked) =>
+                        setOpts((o) => ({
+                          ...o,
+                          mergeLyrics: checked === true ? "1" : "",
+                        }))
+                      }
+                    />
+                    歌词并入吉他等其他音轨
+                  </Label>
+                </Row>
+              )}
+
               {(target === "pdf" || target === "png" || target === "png-long") && (
                 <Row label="谱表类型">
                   <Select
@@ -284,6 +330,26 @@ export default function Home() {
                   </Select>
                 </Row>
               )}
+
+              {trackList && (
+                <Row label="导出音轨">
+                  <div className="flex flex-col gap-1.5">
+                    {trackList.map((name, i) => (
+                      <Label key={i} className="font-normal">
+                        <Checkbox
+                          checked={sel.includes(i)}
+                          onCheckedChange={(checked) =>
+                            setSel((s) =>
+                              checked === true ? [...s, i].sort((a, b) => a - b) : s.filter((x) => x !== i)
+                            )
+                          }
+                        />
+                        {name}
+                      </Label>
+                    ))}
+                  </div>
+                </Row>
+              )}
             </div>
           )}
 
@@ -295,14 +361,17 @@ export default function Home() {
         </CardContent>
 
         <CardFooter className="flex-col gap-4">
-          <Button className="w-full" onClick={convert} disabled={!file || busy}>
+          <Button
+            className="w-full"
+            onClick={convert}
+            disabled={!file || busy || (!!trackList && sel.length === 0)}
+          >
             {busy ? "转换中…" : "转换并下载"}
           </Button>
           <p className="text-muted-foreground text-xs leading-relaxed">
             Guitar Pro 谱转 MusicXML / GP 时直接解析原文件，保留六线谱、调弦与弦位品格；
             其余转换由 MuseScore 引擎完成。选择六线谱时，非 Guitar Pro
-            来源会自动推断调弦并指派弦位品格。.gp5 导出仅保留音符 / 节奏 / 结构
-            （不含推弦滑音等演奏效果）；不支持导出 gp3 / gp4 / gpx。
+            来源会自动推断调弦并指派弦位品格。不支持导出 gp3 / gp4 / gpx。
           </p>
         </CardFooter>
       </Card>

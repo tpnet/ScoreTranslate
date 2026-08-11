@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import JSZip from "jszip";
+import type { model } from "@coderline/alphatab";
 
 const run = promisify(execFile);
 
@@ -12,10 +13,10 @@ const MSCORE =
 const TIMEOUT_MS = 120_000;
 
 export const INPUT_EXTS = [
-  "mid", "midi", "gp", "gpx", "gp3", "gp4", "gp5", "mxl", "musicxml", "xml",
+  "mid", "midi", "gp", "gpx", "gp3", "gp4", "gp5", "mxl", "musicxml", "xml", "json",
 ] as const;
 
-export const OUTPUT_EXTS = ["mid", "musicxml", "xml", "mxl", "gp", "gp5", "pdf", "png", "png-long", "mscz"] as const;
+export const OUTPUT_EXTS = ["mid", "musicxml", "xml", "mxl", "gp", "gp5", "json", "pdf", "png", "png-long", "mscz"] as const;
 export type OutputExt = (typeof OUTPUT_EXTS)[number];
 
 // gp 系输入转 MusicXML/GP 时不经过 MuseScore：MuseScore 的 MusicXML 导出会丢掉
@@ -61,6 +62,68 @@ export interface ConvertOptions {
    * 非 gp 来源选 tab 会自动推断调弦并指派弦品
    */
   staffMode?: "tab" | "standard";
+  /** gp / gp5 / MusicXML / pdf / png：把人声轨歌词按时间对齐并入其他音轨（弹唱谱） */
+  mergeLyrics?: boolean;
+  /** 只导出这些音轨（下标同 listTracks 的返回顺序），缺省导出全部 */
+  tracks?: number[];
+}
+
+// 只保留选中的音轨。不重排 index：gp-to-musicxml 用它拼 part id，
+// alphaTab 的 stylesheet 也按原 index 索引
+function filterTracks(score: model.Score, tracks?: number[]): void {
+  if (!tracks?.length) return;
+  const keep = score.tracks.filter((_, i) => tracks.includes(i));
+  if (keep.length === 0) throw new Error("转换失败：选中的音轨不存在");
+  score.tracks = keep;
+}
+
+// 找歌词拍最多的音轨作为来源，把每拍歌词对齐拷贝到其余音轨同小节最近的拍上。
+// 幂等：目标拍原本就有歌词则跳过，重复调用不会叠加
+function mergeLyricsAcrossTracks(score: model.Score): void {
+  const lyricBeats = (t: model.Track) => {
+    let n = 0;
+    for (const s of t.staves) for (const b of s.bars) for (const v of b.voices) for (const bt of v.beats) if (bt.lyrics?.length) n++;
+    return n;
+  };
+  let src: model.Track | null = null;
+  let best = 0;
+  for (const t of score.tracks) {
+    const n = lyricBeats(t);
+    if (n > best) { best = n; src = t; }
+  }
+  if (!src) return;
+
+  const byBar = new Map<number, { start: number; text: string }[]>();
+  for (const s of src.staves) for (const b of s.bars) for (const v of b.voices) for (const bt of v.beats) {
+    if (!bt.lyrics?.length || !bt.lyrics[0]) continue;
+    if (!byBar.has(b.index)) byBar.set(b.index, []);
+    byBar.get(b.index)!.push({ start: bt.playbackStart, text: bt.lyrics[0] });
+  }
+  for (const t of score.tracks) {
+    if (t === src) continue;
+    for (const s of t.staves) for (const b of s.bars) {
+      const entries = byBar.get(b.index);
+      if (!entries) continue;
+      const beats = b.voices
+        .flatMap((v) => v.beats)
+        .filter((bt) => !bt.isRest && (bt.graceType as number) === 0);
+      if (beats.length === 0) continue;
+      const written = new Set<model.Beat>();
+      for (const e of entries) {
+        let target = beats[0];
+        for (const bt of beats) {
+          if (Math.abs(bt.playbackStart - e.start) < Math.abs(target.playbackStart - e.start)) target = bt;
+        }
+        if (target.lyrics?.length && !written.has(target)) continue;
+        // 人声比吉他密时多个音节落到同一拍，拼接显示
+        if (written.has(target)) target.lyrics![0] += e.text;
+        else {
+          target.lyrics = [e.text];
+          written.add(target);
+        }
+      }
+    }
+  }
 }
 
 // pdf 导出用的 MuseScore 样式文件，只写用户指定的字段
@@ -80,6 +143,7 @@ const CONTENT_TYPES: Record<string, string> = {
   mxl: "application/vnd.recordare.musicxml",
   gp: "application/octet-stream",
   gp5: "application/octet-stream",
+  json: "application/json",
   mscz: "application/x-musescore",
   pdf: "application/pdf",
   png: "image/png",
@@ -97,13 +161,23 @@ async function mscore(inPath: string, outPath: string, extraArgs: string[] = [])
 }
 
 // bytes 可以是 MusicXML 或任意 gp 系格式，ScoreLoader 自动识别
-async function exportGpFamily(bytes: Uint8Array, target: "gp" | "gp5"): Promise<Uint8Array> {
+async function exportGpFamily(
+  bytes: Uint8Array,
+  target: "gp" | "gp5" | "json",
+  mergeLyrics = false,
+  tracks?: number[],
+): Promise<Uint8Array> {
   const alphaTab = await import("@coderline/alphatab");
   const settings = new alphaTab.Settings();
   const score = alphaTab.importer.ScoreLoader.loadScoreFromBytes(bytes, settings);
+  if (mergeLyrics) mergeLyricsAcrossTracks(score);
+  filterTracks(score, tracks);
   if (target === "gp5") {
     const { exportGp5 } = await import("./gp5-writer");
     return exportGp5(score);
+  }
+  if (target === "json") {
+    return new TextEncoder().encode(alphaTab.model.JsonConverter.scoreToJson(score));
   }
   return new alphaTab.exporter.Gp7Exporter().export(score, settings);
 }
@@ -114,6 +188,8 @@ async function gpToXmlTarget(
   target: OutputExt,
   baseName: string,
   staffMode: "tab" | "standard" = "tab",
+  mergeLyrics = false,
+  tracks?: number[],
 ): Promise<ConvertResult> {
   const alphaTab = await import("@coderline/alphatab");
   const { scoreToMusicXml } = await import("./gp-to-musicxml");
@@ -123,6 +199,8 @@ async function gpToXmlTarget(
   } catch {
     throw new Error("转换失败：无法解析该乐谱文件");
   }
+  if (mergeLyrics) mergeLyricsAcrossTracks(score);
+  filterTracks(score, tracks);
   // TAB 需要弦号品格；MusicXML/MIDI 来源没有，就地指派（GP 来源原样保留）
   if (staffMode === "tab") {
     const { ensureFingerings } = await import("./gp5-writer");
@@ -146,6 +224,57 @@ async function gpToXmlTarget(
     filename: `${baseName}.${target}`,
     contentType: CONTENT_TYPES[target],
   };
+}
+
+async function scoreFromAlphaTabJson(input: Uint8Array): Promise<model.Score> {
+  const alphaTab = await import("@coderline/alphatab");
+  // alphaTab 1.8 的反序列化按全小写键做大小写敏感匹配，而旧版 alphaTab
+  // 导出的是 camelCase 键（如 masterBars），会被整体跳过导致 finish 崩溃。
+  // 递归把键转小写即可同时兼容新旧两种导出
+  const lowerKeys = (v: unknown): unknown =>
+    Array.isArray(v)
+      ? v.map(lowerKeys)
+      : v && typeof v === "object"
+        ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k.toLowerCase(), lowerKeys(x)]))
+        : v;
+  try {
+    const obj = lowerKeys(JSON.parse(new TextDecoder().decode(input)));
+    return alphaTab.model.JsonConverter.jsObjectToScore(obj, new alphaTab.Settings());
+  } catch {
+    throw new Error("转换失败：无法解析该 alphaTab JSON");
+  }
+}
+
+// 列出音轨名供前端勾选。下标与 ConvertOptions.tracks 一致：解析链路和转换时
+// 完全相同（gp 系由 alphaTab 直接解析，其余先经 MuseScore 桥接成 MusicXML）
+export async function listTracks(input: Uint8Array, inputExt: string): Promise<string[]> {
+  const alphaTab = await import("@coderline/alphatab");
+  let score: model.Score;
+  if (inputExt === "json") {
+    score = await scoreFromAlphaTabJson(input);
+  } else {
+    let bytes = input;
+    if (!GP_INPUT_EXTS.includes(inputExt)) {
+      const dir = await mkdtemp(path.join(tmpdir(), "score-"));
+      try {
+        const inPath = path.join(dir, `input.${inputExt}`);
+        await writeFile(inPath, input);
+        const outPath = path.join(dir, "bridge.musicxml");
+        await mscore(inPath, outPath);
+        bytes = await readFile(outPath).catch(() => {
+          throw new Error("读取音轨失败：MuseScore 未能解析该文件");
+        });
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    }
+    try {
+      score = alphaTab.importer.ScoreLoader.loadScoreFromBytes(bytes, new alphaTab.Settings());
+    } catch {
+      throw new Error("读取音轨失败：无法解析该乐谱文件");
+    }
+  }
+  return score.tracks.map((t, i) => t.name?.trim() || `音轨 ${i + 1}`);
 }
 
 const pageNo = (f: string) => Number(f.match(/-(\d+)\.png$/)![1]);
@@ -198,25 +327,46 @@ export async function convertScore(
   baseName: string,
   options: ConvertOptions = {},
 ): Promise<ConvertResult> {
+  // alphaTab JSON 输入统一先转回 .gp 字节，之后完整复用 gp 系链路
+  // （XML 目标走自研序列化，pdf/png/mid/mscz 由 MuseScore 读 .gp）
+  if (inputExt === "json") {
+    const alphaTab = await import("@coderline/alphatab");
+    const settings = new alphaTab.Settings();
+    const score = await scoreFromAlphaTabJson(input);
+    if (options.mergeLyrics) mergeLyricsAcrossTracks(score);
+    // 音轨过滤留给下游的 gp 链路：这里导出的 .gp 重新导入后下标会重排
+    input = new alphaTab.exporter.Gp7Exporter().export(score, settings);
+    inputExt = "gp";
+  }
+
   const isGpInput = GP_INPUT_EXTS.includes(inputExt);
 
   // gp 系输入的 alphaTab 直连路径，不落盘、不经过 MuseScore
   if (isGpInput && XML_TARGETS.includes(target)) {
-    return gpToXmlTarget(input, target, baseName, options.staffMode);
+    return gpToXmlTarget(input, target, baseName, options.staffMode, options.mergeLyrics, options.tracks);
   }
-  if (isGpInput && (target === "gp" || target === "gp5")) {
-    const data = await exportGpFamily(input, target).catch(() => {
+  const isGpFamilyTarget = target === "gp" || target === "gp5" || target === "json";
+  if (isGpInput && isGpFamilyTarget) {
+    const data = await exportGpFamily(input, target, options.mergeLyrics, options.tracks).catch((e) => {
+      if (e instanceof Error && e.message.startsWith("转换失败：")) throw e;
       throw new Error("转换失败：无法解析该 Guitar Pro 文件");
     });
     return { data, filename: `${baseName}.${target}`, contentType: CONTENT_TYPES[target] };
   }
 
+  const isRender = target === "pdf" || target === "png" || target === "png-long";
+
   // gp 输入渲染 pdf/png 时若指定了谱表类型，先经自研序列化器生成对应 MusicXML
   // 再交 MuseScore 渲染；不指定则 MuseScore 直接导入原文件
-  if (isGpInput && (target === "pdf" || target === "png" || target === "png-long") && options.staffMode) {
-    const bridged = await gpToXmlTarget(input, "musicxml", baseName, options.staffMode);
+  if (isGpInput && isRender && options.staffMode) {
+    const bridged = await gpToXmlTarget(input, "musicxml", baseName, options.staffMode, options.mergeLyrics, options.tracks);
     input = bridged.data;
     inputExt = "musicxml";
+  } else if (isGpInput && options.tracks?.length) {
+    // 剩下的 gp 输入目标（mid / mscz、以及谱表类型跟随原谱的 pdf/png）不能走
+    // MusicXML 桥接（会改变渲染），改为用 alphaTab 重新导出只含选中音轨的 .gp
+    input = await exportGpFamily(input, "gp", options.mergeLyrics, options.tracks);
+    inputExt = "gp";
   }
 
   const dir = await mkdtemp(path.join(tmpdir(), "score-"));
@@ -224,33 +374,37 @@ export async function convertScore(
     let inPath = path.join(dir, `input.${inputExt}`);
     await writeFile(inPath, input);
 
-    // 非 gp 输入选择六线谱时：MuseScore 先桥接成 MusicXML，指派弦品后按 TAB
-    // 重新序列化；XML 目标直接返回序列化结果，pdf/png 目标交回 MuseScore 渲染
+    // 非 gp 输入选择六线谱、或只导出部分音轨时：MuseScore 先桥接成 MusicXML，
+    // 指派弦品 / 过滤音轨后重新序列化；XML 目标直接返回序列化结果，
+    // pdf/png/mid/mscz 目标交回 MuseScore。
+    // gp/gp5/json 目标排除在外——它们下面有自己的桥接，会重复过滤一次
     if (
       !isGpInput &&
-      options.staffMode === "tab" &&
-      (XML_TARGETS.includes(target) || target === "pdf" || target === "png" || target === "png-long")
+      !isGpFamilyTarget &&
+      (options.staffMode === "tab" || options.tracks?.length)
     ) {
+      const mode = options.staffMode ?? "standard";
       const bridgePath = path.join(dir, "bridge.musicxml");
       await mscore(inPath, bridgePath);
       const bridge = await readFile(bridgePath).catch(() => {
         throw new Error("转换失败：MuseScore 未能解析该文件");
       });
-      if (XML_TARGETS.includes(target)) return gpToXmlTarget(bridge, target, baseName, "tab");
-      const tab = await gpToXmlTarget(bridge, "musicxml", baseName, "tab");
-      inPath = path.join(dir, "tab.musicxml");
-      await writeFile(inPath, tab.data);
+      if (XML_TARGETS.includes(target))
+        return gpToXmlTarget(bridge, target, baseName, mode, options.mergeLyrics, options.tracks);
+      const staged = await gpToXmlTarget(bridge, "musicxml", baseName, mode, options.mergeLyrics, options.tracks);
+      inPath = path.join(dir, "staged.musicxml");
+      await writeFile(inPath, staged.data);
     }
 
-    if (target === "gp" || target === "gp5") {
-      // 非 gp 输入：MuseScore 统一转成 MusicXML，再导出 Guitar Pro：
-      // .gp 用 alphaTab 的 Gp7Exporter，.gp5 用自研的 GP5 二进制写出器
+    if (isGpFamilyTarget) {
+      // 非 gp 输入：MuseScore 统一转成 MusicXML，再导出：.gp 用 alphaTab 的
+      // Gp7Exporter，.gp5 用自研 GP5 写出器，.json 用 alphaTab 的 JsonConverter
       const xmlPath = path.join(dir, "bridge.musicxml");
       await mscore(inPath, xmlPath);
       const bridge = await readFile(xmlPath).catch(() => {
         throw new Error("转换失败：MuseScore 未能解析该文件");
       });
-      const data = await exportGpFamily(bridge, target);
+      const data = await exportGpFamily(bridge, target, options.mergeLyrics, options.tracks);
       return { data, filename: `${baseName}.${target}`, contentType: CONTENT_TYPES[target] };
     }
 

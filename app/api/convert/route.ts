@@ -29,10 +29,16 @@ function parseOptions(form: FormData): ConvertOptions {
     scale: num("scale", 50, 200),
   };
   if (form.get("unrollRepeats") === "1") opts.unrollRepeats = true;
+  if (form.get("mergeLyrics") === "1") opts.mergeLyrics = true;
   const paper = form.get("paper");
   if (paper === "a4" || paper === "letter") opts.paper = paper;
   const staffMode = form.get("staffMode");
   if (staffMode === "tab" || staffMode === "standard") opts.staffMode = staffMode;
+  const tracks = form.get("tracks");
+  if (typeof tracks === "string" && tracks.trim() !== "") {
+    const list = tracks.split(",").map(Number).filter(Number.isInteger);
+    if (list.length) opts.tracks = list;
+  }
   return opts;
 }
 

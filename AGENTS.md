@@ -17,6 +17,7 @@ bun run build   # 生产构建（改完转换逻辑后跑一次，确保类型�
 - `lib/gp5-writer.ts` — GP5 v5.00 二进制写出器 + 弦品指派算法
 - `lib/gp-to-musicxml.ts` — alphaTab 乐谱模型 → MusicXML 序列化器（保留 TAB/弦品）
 - `app/api/convert/route.ts` — multipart 上传，校验后返回文件流
+- `app/api/tracks/route.ts` — 返回音轨名列表，供前端勾选导出哪些轨
 - `app/page.tsx` — 单页界面
 
 ## 转换链路
@@ -28,14 +29,17 @@ bun run build   # 生产构建（改完转换逻辑后跑一次，确保类型�
 
 导出配置见 `ConvertOptions`（lib/convert.ts）：png 的 DPI/裁边走 `-r`/`-T`，pdf 的纸张/缩放走 `-S` 临时样式文件，mid 展开反复走 `--unroll-repeats`，MusicXML/pdf/png 目标的谱表类型（TAB/五线谱）由自研序列化器处理：gp 输入直接解析；非 gp 输入选 TAB 时先由 MuseScore 桥接成 MusicXML、`ensureFingerings` 指派弦品后重新序列化；pdf/png 最后交回 MuseScore 渲染。这些是 MuseScore CLI 仅有的相关开关，别的"配置项"CLI 不支持，gp/gp5/mscz 转换本身无参数。
 
+`tracks`（只导出选中音轨，对全部目标格式生效）统一在 alphaTab 模型上过滤，下标由 `listTracks` 给出——它和转换走同一条解析链路（gp 系 alphaTab 直连，其余先经 MuseScore 桥接成 MusicXML），下标才对得上。因此 pdf/png/mid/mscz 这些本来直接丢给 MuseScore 的目标，在选轨时被迫先过一遍 alphaTab：gp 输入指定了谱表类型走自研 MusicXML 序列化，未指定则重新导出只含选中轨的 `.gp` 交回 MuseScore，避免改变"跟随原谱"的渲染；非 gp 输入一律 MuseScore 桥接成 MusicXML 后重新序列化。**gp/gp5/json 目标必须排除在这段桥接之外**——它们下面有自己的桥接，过两遍会按已过滤后的下标再过滤一次。过滤不重排 `track.index`——`gp-to-musicxml.ts` 用它拼 part id。
+
 ## GP5 写出器（lib/gp5-writer.ts）
 
 - 字节布局逐字段**镜像 alphaTab 的 `Gp3To5Importer`**（node_modules/@coderline/alphatab/dist/alphaTab.core.mjs 中搜 `Gp3To5Importer`）的 v5.00 读取分支。改字段顺序前必须对照该解析器，任何一个字节错位都会毁掉整个文件的后续解析。
 - 验证方式是**双解析器回读**：alphaTab 重新导入逐拍比对 + MuseScore 转回 MusicXML 比对音高序列。两个独立实现都读对才算对，改动后两条都要跑。
 - MusicXML/MIDI 来源的音符没有弦号品格（`note.string === -1`），由 `assignBeat` 贪心指派；alphaTab 的 MusicXML 导入还会把标题中的空格变成 U+00A0，`ascii()` 已处理。
-- 不写出演奏效果（beat/note effects 的 flag 位保持 0），这是刻意的范围裁剪，加效果前先确认真的有人需要。
+- 演奏效果（beat/note effects）已完整写出，字节结构同样镜像 `readBeatEffects`/`readNoteEffects` 的 v5.00 分支。GP5 格式表达不了的会降级或跳过（wide 颤音→slight、arpeggio→brush、左手点弦/拨片刮弦/fade-out 无对应位），细节见 `gp5-writer.ts` 各写出函数的注释。
 - **每个 `(track, staff)` 展开成一个独立 GP5 音轨**（`expandStaves`）。GP5 格式没有"多谱表音轨"的概念，钢琴大谱表的原生表示就是拆成两个音轨；多谱表时音轨名加 `(1)` `(2)` 后缀，与 `gp-to-musicxml.ts` 的分 part 规则一致。只取 `staves[0]` 会静默丢掉左手声部。
 - **声部要按"非空优先"取，不能按下标取。** GP5 每小节固定 2 个声部，而 alphaTab 的声部下标沿用来源编号——MuseScore 导出的大谱表下谱表用 `<voice>5</voice>`，落到下标 4，下标 0–3 是空占位。直接取 `voices[0]`/`voices[1]` 会全取到空的。
+- **同一音轨各小节写出的声部数必须一致**（`pickVoices` + `twoVoices`）。alphaTab 读到拍数为 0 的声部时干脆不建 `Voice`，于是"有的小节 2 个声部、有的 1 个"会让 `Bar.finish` 链接下一小节时取到 `voices[1] === undefined` 而崩（`nextVoice.beats`）；MuseScore 能正常打开，只有 alphaTab 侧炸。所以只要该轨任一小节写了 2 个声部，其余小节的第二声部就补一个 GP5"空拍"（`0x40` 后跟 `0`，不画休止符）。
 
 ## 改动时必须知道的三件事
 

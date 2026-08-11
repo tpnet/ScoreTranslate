@@ -6,15 +6,36 @@
  * 任何一个字节的偏差都会让整个文件后续错位。修改前先对照该解析器。
  *
  * 支持：多轨、音符/休止符、时值/附点/连音、延音线、力度、拍号/调号、
- * 反复记号、小节标记、调弦/变调夹。不写出演奏效果（推弦、滑音等）与和弦图。
+ * 反复记号、小节标记、调弦/变调夹，以及 GP5 能表达的全部演奏效果
+ * （见 beatEffectFlags / noteEffectFlags 附近的注释）。不写出和弦图。
  */
 import type * as alphaTab from "@coderline/alphatab";
 
 type Score = alphaTab.model.Score;
 type Track = alphaTab.model.Track;
 type Staff = alphaTab.model.Staff;
+type Bar = alphaTab.model.Bar;
 type Beat = alphaTab.model.Beat;
 type Note = alphaTab.model.Note;
+type BendPoint = alphaTab.model.BendPoint;
+
+// alphaTab 的枚举在此只做类型导入，运行时取不到枚举对象，因此按值内联
+const FADE_IN = 1;
+const VIBRATO_NONE = 0;
+const BRUSH_NONE = 0;
+const BRUSH_UP = 1; // BrushUp=1 / ArpeggioUp=3 都算向上
+const ARPEGGIO_UP = 3;
+const RASGUEADO_NONE = 0;
+const PICK_STROKE_NONE = 0;
+const PICK_STROKE_UP = 1;
+const ACCENT_NORMAL = 1;
+const ACCENT_HEAVY = 2;
+const FINGER_UNKNOWN = -2;
+const GRACE_NONE = 0;
+const GRACE_ON_BEAT = 1;
+const SLIDE_OUT = { none: 0, shift: 1, legato: 2, outUp: 3, outDown: 4 };
+const SLIDE_IN = { none: 0, fromBelow: 1, fromAbove: 2 };
+const HARMONIC = { none: 0, natural: 1, artificial: 2, pinch: 3, tap: 4, semi: 5 };
 
 const MAX_FRET = 29;
 
@@ -77,11 +98,11 @@ class ByteWriter {
 
 // GP5 传统上用 cp1252 编码，非 ASCII 字符在各家实现间无一致解码方式，统一降级为 '?'
 // （alphaTab 的 MusicXML 导入会把空格转成 U+00A0，先归一化再降级）
-function ascii(s: string): string {
+function ascii(s: string, max = 250): string {
   return (s ?? "")
     .replace(/[\u00a0\u2000-\u200b\u3000]/g, " ")
     .replace(/[^\x20-\x7e]/g, "?")
-    .slice(0, 250);
+    .slice(0, max);
 }
 
 /** alphaTab Duration 枚举值（1=全音符…64=64分）→ GP5 时值字节（-2..4） */
@@ -229,6 +250,22 @@ function expandStaves(score: Score): Unit[] {
   return units;
 }
 
+/**
+ * 取一个小节里实际要写进 GP5 的声部（每个元素是该声部要写的拍列表，最多 2 个）。
+ * GP5 每小节固定 2 个声部，但 alphaTab 的声部下标沿用来源编号：MuseScore 导出的
+ * 大谱表下谱表用 <voice>5</voice>，对应下标 4，前面 4 个是空占位，所以按"非空优先"
+ * 取；整小节皆空时退回原下标，保留休止符原样。没有拍可写的声部一律剔除，
+ * 因为 GP5 里它写成拍数 0，alphaTab 读到时不会建出 Voice。
+ */
+function pickVoices(bar: Bar | undefined): Beat[][] {
+  const all = bar?.voices ?? [];
+  const nonEmpty = all.filter((v) => !v.isEmpty);
+  return (nonEmpty.length > 0 ? nonEmpty : all)
+    .map((v) => v.beats.filter((bt) => bt.graceType === 0))
+    .filter((beats) => beats.length > 0)
+    .slice(0, 2);
+}
+
 export function exportGp5(score: Score): Uint8Array {
   const w = new ByteWriter();
   const units = expandStaves(score);
@@ -256,11 +293,45 @@ export function exportGp5(score: Score): Uint8Array {
     w.stringIntByte(s);
   w.i32(0); // notice 行数
 
-  // ---- 歌词（空） ----
-  w.i32(0);
+  // ---- 歌词 ----
+  // GP5 歌词是曲谱级：挂载音轨号 + 固定 5 行（每行：起始小节 + int32 长度文本），
+  // 打开时按空格分隔的音节从起始小节起顺次分配到该轨声部 1 的**每个**非休止拍上。
+  // 因此收集必须沿写出后的声部 1（pickVoices 的第一个声部）逐拍走：无歌词的拍写
+  // "-" 占位（解析后是空音节，占一拍不显示），否则后续音节整体前移错位。
+  // 音节内的空格/连字符换成 +（两者都是 GP 的音节分隔符，保留会拆散音节），
+  // 非 ASCII 歌词同其他字符串一样降级为 '?'。取歌词拍最多的展开单元作为挂载轨
+  let lyricUnit = -1;
+  let lyricChunks: string[] = [];
+  let lyricStartBar = 0;
+  let lyricBest = 0;
+  units.forEach(({ staff }, ui) => {
+    const chunks: string[] = [];
+    let first = -1;
+    let count = 0;
+    for (const bar of staff.bars) {
+      for (const beat of pickVoices(bar)[0] ?? []) {
+        if (beat.isRest || beat.isEmpty) continue;
+        const text = beat.lyrics?.[0];
+        if (text && first < 0) first = bar.index;
+        if (first < 0) continue;
+        if (text) count++;
+        chunks.push(text ? text.replace(/[\s-]+/g, "+") : "-");
+      }
+    }
+    while (chunks.length && chunks[chunks.length - 1] === "-") chunks.pop();
+    if (count > lyricBest) {
+      lyricBest = count;
+      lyricUnit = ui;
+      lyricChunks = chunks;
+      lyricStartBar = first;
+    }
+  });
+  w.i32(lyricUnit + 1); // 1-based，0 表示无歌词轨
   for (let i = 0; i < 5; i++) {
-    w.i32(1);
-    w.i32(0);
+    w.i32(i === 0 ? lyricStartBar + 1 : 1);
+    const t = i === 0 ? ascii(lyricChunks.join(" "), Infinity) : "";
+    w.i32(t.length);
+    w.chars(t);
   }
 
   // ---- 页面设置 ----
@@ -373,26 +444,27 @@ export function exportGp5(score: Score): Uint8Array {
     w.zeros(16);
   }
 
+  // 声部数必须在同一音轨的所有小节间一致：alphaTab 读到拍数为 0 的声部时干脆不建
+  // Voice，相邻小节声部数不一致会让 Bar.finish 的链接阶段取空（voices[1] 是 undefined）
+  // 而崩溃。所以只要该轨任一小节写了 2 个声部，其余小节的第二声部就写空拍占位。
+  const twoVoices = units.map(({ staff }) =>
+    staff.bars.some((bar) => pickVoices(bar).length > 1),
+  );
+
   // ---- 小节内容：按小节 × 音轨，每格 1 个换行字节 + 2 个声部 ----
   for (let b = 0; b < barCount; b++) {
     for (let t = 0; t < units.length; t++) {
-      const bar = units[t].staff.bars[b];
-      // GP5 每小节固定 2 个声部，但 alphaTab 的声部下标沿用来源编号：MuseScore
-      // 导出的大谱表下谱表用 <voice>5</voice>，对应下标 4，前面 4 个是空占位。
-      // 因此按"非空优先"取前两个；整小节皆空时退回原下标，保留休止符原样
-      const all = bar?.voices ?? [];
-      const nonEmpty = all.filter((v) => !v.isEmpty);
-      const picked = nonEmpty.length > 0 ? nonEmpty : all;
+      const picked = pickVoices(units[t].staff.bars[b]);
       w.u8(0);
       for (let v = 0; v < 2; v++) {
-        const voice = picked[v];
-        const beats = voice ? voice.beats.filter((bt) => bt.graceType === 0) : [];
+        const beats = picked[v] ?? [];
         if (beats.length === 0) {
-          if (v === 0) {
-            // 第一声部不能为空：写一个全休止符占位
+          if (v === 0 || twoVoices[t]) {
+            // 第一声部不能为空，写全小节休止符；第二声部只在该轨用到 2 声部时补位，
+            // 写 GP5 的"空拍"（0x40 后跟 0），不渲染出多余的休止符
             w.i32(1);
             w.u8(0x40);
-            w.u8(2);
+            w.u8(v === 0 ? 2 : 0);
             w.i8(-2);
             w.u8(0);
             w.i16(0);
@@ -424,30 +496,247 @@ function writeBeat(
 
   const hasTuplet =
     beat.tupletNumerator > 1 && beat.tupletDenominator > 0 && VALID_TUPLETS.has(beat.tupletNumerator);
+  const beatFx = beatEffectFlags(beat);
 
   let flags = 0;
   if (beat.dots > 0) flags |= 1;
+  if (beatFx) flags |= 8;
   if (hasTuplet) flags |= 32;
   if (isRest) flags |= 64;
 
   w.u8(flags);
-  if (isRest) w.u8(2);
+  if (isRest) w.u8(beat.isEmpty ? 0 : 2); // 0 = 空拍（不画休止符），2 = 真休止符
   w.i8(gpDuration(beat.duration));
   if (hasTuplet) w.i32(beat.tupletNumerator);
+  if (beatFx) writeBeatEffects(w, beat, beatFx);
 
   let stringFlags = 0;
   for (const note of notes) stringFlags |= 1 << (6 - (L - assigned.get(note)!.string));
   w.u8(stringFlags);
 
   // 音符按高音弦在前的顺序写出（与 stringFlags 从 bit6 向下读取的顺序一致）
-  for (const note of notes) {
-    const f = assigned.get(note)!;
-    w.u8(0x20 | 0x10);
-    w.u8(note.isDead ? 3 : note.isTieDestination ? 2 : 1);
-    w.i8(Math.max(1, Math.min(8, note.dynamics + 1)));
-    w.i8(f.fret);
-    w.u8(0); // v5 flags2
-  }
+  notes.forEach((note, i) => {
+    writeNote(w, beat, note, assigned.get(note)!, tuning, i === 0, assigned);
+  });
 
   w.i16(0); // v5 拍级 flags2（符杠/八度记号，不使用）
+}
+
+/**
+ * 拍级效果的两个 flag 字节，无效果时返回 null。
+ * GP5 表达不了因而跳过的：fade-out / volume swell（只有 fade-in 位）。
+ * 有损降级：wide vibrato → slight；rasgueado 的 18 种细分 → 唯一的 Ii；
+ * arpeggio up/down → brush up/down（GP5 的击弦只有上下两向）。
+ */
+function beatEffectFlags(beat: Beat): [number, number] | null {
+  let f1 = 0;
+  let f2 = 0;
+  if (beat.fade === FADE_IN) f1 |= 16;
+  if (beat.vibrato !== VIBRATO_NONE) f1 |= 2;
+  if (beat.tap || beat.slap || beat.pop) f1 |= 32;
+  if (beat.brushType !== BRUSH_NONE) f1 |= 64;
+  if (beat.rasgueado !== RASGUEADO_NONE) f2 |= 1;
+  if (beat.pickStroke !== PICK_STROKE_NONE) f2 |= 2;
+  if (beat.whammyBarPoints && beat.whammyBarPoints.length > 0) f2 |= 4;
+  return f1 || f2 ? [f1, f2] : null;
+}
+
+function writeBeatEffects(w: ByteWriter, beat: Beat, [f1, f2]: [number, number]): void {
+  w.u8(f1);
+  w.u8(f2);
+  if (f1 & 32) w.i8(beat.tap ? 1 : beat.slap ? 2 : 3);
+  if (f2 & 4) writeBendPoints(w, beat.whammyBarPoints!);
+  if (f1 & 64) {
+    // v5.00 先 up 后 down，只有一侧非零
+    const stroke = strokeValue(beat.brushDuration);
+    const up = beat.brushType === BRUSH_UP || beat.brushType === ARPEGGIO_UP;
+    w.u8(up ? stroke : 0);
+    w.u8(up ? 0 : stroke);
+  }
+  if (f2 & 2) w.i8(beat.pickStroke === PICK_STROKE_UP ? 1 : 2);
+}
+
+/** brushDuration（ticks）→ GP5 击弦速度档位，取值来自 Gp3To5Importer._toStrokeValue 的逆映射 */
+function strokeValue(duration: number): number {
+  if (duration >= 480) return 6;
+  if (duration >= 240) return 5;
+  if (duration >= 120) return 4;
+  if (duration >= 60) return 3;
+  return 2; // 档位 1 与 2 读回来都是 30
+}
+
+/** 推弦 / 摇把的点列表，GP5 的存储单位是 alphaTab 的 25 倍（Gp3To5Importer._bendStep） */
+function writeBendPoints(w: ByteWriter, points: BendPoint[]): void {
+  let max = 0;
+  for (const p of points) max = Math.max(max, p.value);
+  w.u8(1); // 类型；alphaTab 读取时忽略，由点列表推断
+  w.i32(max * 25);
+  w.i32(points.length);
+  for (const p of points) {
+    w.i32(p.offset);
+    w.i32(p.value * 25);
+    w.u8(0); // 该点是否带颤音；alphaTab 读取时忽略
+  }
+}
+
+/**
+ * GP5 把倚音存成主音符的一个效果，而 alphaTab 存成独立的 grace beat，
+ * 因此取紧邻主拍之前的那个 grace beat。GP5 每音符只能挂一个倚音，
+ * 连续多个 grace beat / 倚音和弦只保留最后一个 beat 的首音。
+ */
+function graceOf(beat: Beat, assigned: Map<Note, Fingering>): Note | null {
+  const prev = beat.voice.beats[beat.index - 1];
+  if (!prev || prev.graceType === GRACE_NONE) return null;
+  return prev.notes.find((n) => assigned.has(n)) ?? null;
+}
+
+function writeNote(
+  w: ByteWriter,
+  beat: Beat,
+  note: Note,
+  f: Fingering,
+  tuning: number[],
+  isFirst: boolean,
+  assigned: Map<Note, Fingering>,
+): void {
+  const grace = isFirst ? graceOf(beat, assigned) : null;
+  const fx = noteEffectFlags(note, beat, grace, isFirst, tuning[tuning.length - f.string]);
+
+  let flags = 0x20 | 0x10; // 音符类型 + 力度
+  if (note.accentuated === ACCENT_HEAVY) flags |= 2;
+  else if (note.accentuated === ACCENT_NORMAL) flags |= 64;
+  if (note.isGhost) flags |= 4;
+  if (fx) flags |= 8;
+  if (note.leftHandFinger !== FINGER_UNKNOWN || note.rightHandFinger !== FINGER_UNKNOWN) flags |= 128;
+
+  w.u8(flags);
+  w.u8(note.isDead ? 3 : note.isTieDestination ? 2 : 1);
+  w.i8(Math.max(1, Math.min(8, note.dynamics + 1)));
+  w.i8(f.fret);
+  if (flags & 128) {
+    w.i8(note.leftHandFinger);
+    w.i8(note.rightHandFinger);
+  }
+  w.u8(0); // v5 附加 flags（变音记号交换，不使用）
+  if (fx) writeNoteEffects(w, note, beat, fx, grace, tuning[tuning.length - f.string], assigned);
+}
+
+/**
+ * 音符级效果的两个 flag 字节，无效果时返回 null。
+ * GP5 表达不了因而跳过的：拨片刮弦（SlideOutType.PickSlideUp/Down）、
+ * feedback 泛音、tenuto 重音、左手点弦（GP6+ 才有）、bendStyle。
+ */
+function noteEffectFlags(
+  note: Note,
+  beat: Beat,
+  grace: Note | null,
+  isFirst: boolean,
+  stringTuning: number,
+): [number, number] | null {
+  let f1 = 0;
+  let f2 = 0;
+  if (note.bendPoints && note.bendPoints.length > 0) f1 |= 1;
+  if (note.isHammerPullOrigin) f1 |= 2;
+  if (note.isLetRing) f1 |= 8;
+  if (grace) f1 |= 16;
+  if (note.isStaccato) f2 |= 1;
+  if (note.isPalmMute) f2 |= 2;
+  // 颤音拨片在 GP5 里是音符效果、在 alphaTab 里挂在拍上，只随首音写一次
+  if (isFirst && beat.tremoloPicking) f2 |= 4;
+  if (slideBits(note) !== 0) f2 |= 8;
+  if (harmonicKind(note) !== 0) f2 |= 16;
+  if (trillFret(note, stringTuning) >= 0) f2 |= 32;
+  if (note.vibrato !== VIBRATO_NONE) f2 |= 64;
+  return f1 || f2 ? [f1, f2] : null;
+}
+
+function writeNoteEffects(
+  w: ByteWriter,
+  note: Note,
+  beat: Beat,
+  [f1, f2]: [number, number],
+  grace: Note | null,
+  stringTuning: number,
+  assigned: Map<Note, Fingering>,
+): void {
+  w.u8(f1);
+  w.u8(f2);
+  if (f1 & 1) writeBendPoints(w, note.bendPoints!);
+  if (f1 & 16) writeGrace(w, grace!, assigned);
+  if (f2 & 4) w.u8(beat.tremoloPicking!.marks);
+  if (f2 & 8) w.i8(slideBits(note));
+  if (f2 & 16) writeHarmonic(w, note, stringTuning);
+  if (f2 & 32) {
+    w.u8(trillFret(note, stringTuning));
+    w.u8(note.trillSpeed === 32 ? 2 : note.trillSpeed === 64 ? 3 : 1);
+  }
+}
+
+function writeGrace(w: ByteWriter, grace: Note, assigned: Map<Note, Fingering>): void {
+  w.i8(assigned.get(grace)!.fret);
+  w.i8(Math.max(1, Math.min(8, grace.dynamics + 1)));
+  // 过渡方式：0 无 / 1 圆滑滑音 / 2 推弦 / 3 击勾弦
+  w.i8(grace.slideOutType === SLIDE_OUT.legato ? 1 : grace.isHammerPullOrigin ? 3 : 0);
+  w.u8(1); // 倚音时值；alphaTab 固定按 32 分音符读回
+  w.u8((grace.isDead ? 1 : 0) | (grace.beat.graceType === GRACE_ON_BEAT ? 2 : 0));
+}
+
+/** v5.00 的滑音是位域：出向 1/2/4/8，入向 16/32 */
+function slideBits(note: Note): number {
+  let bits = 0;
+  if (note.slideOutType === SLIDE_OUT.shift) bits |= 1;
+  else if (note.slideOutType === SLIDE_OUT.legato) bits |= 2;
+  else if (note.slideOutType === SLIDE_OUT.outDown) bits |= 4;
+  else if (note.slideOutType === SLIDE_OUT.outUp) bits |= 8;
+  if (note.slideInType === SLIDE_IN.fromBelow) bits |= 16;
+  else if (note.slideInType === SLIDE_IN.fromAbove) bits |= 32;
+  return bits;
+}
+
+/** 泛音类型字节；GP5 没有 feedback 泛音，返回 0 表示不写 */
+function harmonicKind(note: Note): number {
+  switch (note.harmonicType) {
+    case HARMONIC.natural:
+      return 1;
+    case HARMONIC.artificial:
+      return 2;
+    case HARMONIC.tap:
+      return 3;
+    case HARMONIC.pinch:
+      return 4;
+    case HARMONIC.semi:
+      return 5;
+    default:
+      return 0;
+  }
+}
+
+// ModelUtils.deltaFretToHarmonicValue 的逆映射（同值多解时取 alphaTab 会写回原值的那个）
+const HARMONIC_DELTA = new Map<number, number>([
+  [2.4, 2], [3.2, 3], [8.2, 8], [9.6, 10], [14.7, 15], [21.7, 22],
+  [4, 4], [5, 5], [7, 7], [9, 9], [12, 12], [16, 16], [17, 17], [19, 19], [24, 24],
+]);
+
+function writeHarmonic(w: ByteWriter, note: Note, stringTuning: number): void {
+  const kind = harmonicKind(note);
+  w.u8(kind);
+  if (kind !== 2 && kind !== 3) return; // 自然 / 掐拨 / 半泛音无附加字节
+  const delta = HARMONIC_DELTA.get(note.harmonicValue) ?? 12;
+  if (kind === 3) {
+    w.u8(delta); // 点弦泛音直接存品格差
+    return;
+  }
+  // 人工泛音存的是目标音（tone + key + 八度偏移），alphaTab 读回时减去实际发声音级
+  const played = (note.fret + stringTuning) % 12;
+  const target = played + delta;
+  w.u8(target % 12);
+  w.u8(0); // key（升降号），0 表示无
+  w.u8(Math.floor(target / 12));
+}
+
+/** 颤音的目标品格；无颤音或超出字节范围时返回 -1 */
+function trillFret(note: Note, stringTuning: number): number {
+  if (note.trillValue < 0) return -1;
+  const fret = note.trillValue - stringTuning;
+  return fret >= 0 && fret <= 255 ? fret : -1;
 }
