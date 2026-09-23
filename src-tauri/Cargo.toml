@@ -1,0 +1,20 @@
+[package]
+name = "score-translate"
+version = "0.1.0"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+
+[dependencies]
+tauri = { version = "2.11.6", features = [] }
+
+# 缩小外壳二进制体积。strip 必须显式关掉（release 默认会剥 debuginfo）：Rust 工具链
+# 剥离后的 Mach-O 字符串表只按 4 字节对齐，macOS 27 的 dyld 会以
+# "mis-aligned LINKEDIT string pool" 拒绝加载，proc-macro 随机编译失败
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = false

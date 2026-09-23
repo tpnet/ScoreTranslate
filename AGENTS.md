@@ -7,9 +7,10 @@
 ```bash
 bun run dev     # 开发服务器，localhost:3000
 bun run build   # 生产构建（改完转换逻辑后跑一次，确保类型和打包没问题）
+bun tauri build # 桌面安装包，内部先跑 next build，产物在 src-tauri/target/release/bundle/
 ```
 
-⚠️ 两者共用 `.next` 目录，`build` 会覆盖 dev server 的产物，导致运行中的 dev server 报 `ENOENT ... route.js` 并对所有请求返回 500。**不要在 dev server 运行时跑 build**；若已发生，`rm -rf .next` 后重启 dev server。
+⚠️ 三者共用 `.next` 目录，两种 build 都会覆盖 dev server 的产物，导致运行中的 dev server 报 `ENOENT ... route.js` 并对所有请求返回 500。**不要在 dev server 运行时跑 build**；若已发生，`rm -rf .next` 后重启 dev server。
 
 ## 结构
 
@@ -19,6 +20,7 @@ bun run build   # 生产构建（改完转换逻辑后跑一次，确保类型�
 - `app/api/convert/route.ts` — multipart 上传，校验后返回文件流
 - `app/api/tracks/route.ts` — 返回音轨名列表，供前端勾选导出哪些轨
 - `app/page.tsx` — 单页界面
+- `src-tauri/` — Tauri 桌面外壳（见「桌面版」）
 
 ## 转换链路
 
@@ -53,6 +55,17 @@ bun run build   # 生产构建（改完转换逻辑后跑一次，确保类型�
 
 **3. gp3 / gp4 / gpx 只能读不能写。** 这三种旧版 Guitar Pro 格式在开源生态里没有可靠的写出实现，`OUTPUT_EXTS` 里不包含它们，这是刻意的。不要因为它们出现在 `INPUT_EXTS` 里就"补齐"输出（gp5 是例外，有自研写出器）。
 
+## 桌面版（src-tauri/）
+
+Web 代码原样复用，没有改成 Tauri 前端：`next.config.ts` 输出 standalone，Tauri 把 `.next/standalone` 作为 resources 打进包（`server/`），把 bun 作为 externalBin sidecar，`main.rs` 用 bun 跑 `server.js`，窗口加载 `http://127.0.0.1:<随机端口>`。`prepare-sidecar.mjs` 复制的是构建机上正在运行的 bun，所以只能打本机架构的包，Windows 包走 `.github/workflows/desktop.yml`。以下几处删掉不会报错，但会静默坏掉：
+
+- **`Entitlements.plist` 的 `allow-jit`**：打包时 Tauri 用 hardened runtime 重签 bun，并丢掉 bun 原有的 entitlements。缺了它 JavaScriptCore 不报错，而是退回解释器，转换慢约 50 倍。
+- **`Cargo.toml` 的 `strip = false`**：Rust 工具链剥离后的 Mach-O 字符串表只按 4 字节对齐，macOS 27 的 dyld 拒绝加载，表现为 proc-macro 随机报 `can't find crate`。release 默认会剥 debuginfo，所以必须显式写 false。
+- **下载处理器只在 macOS 设**：WKWebView 没有下载界面，不设 `on_download` 时 `<a download>` 会被直接取消。当前实现是存到「下载」文件夹，然后在访达中选中。WebView2 自带下载气泡，一旦设了处理器反而会被隐藏。
+- **`disable_drag_drop_handler()`**：不关的话 Tauri 会截获文件拖放，页面的拖拽上传收不到文件。
+- **`HOSTNAME=127.0.0.1`**：standalone 默认监听 0.0.0.0，会把转换接口暴露给局域网。
+- **`outputFileTracingExcludes`**：排除 sharp（构建机平台的原生库）和 typescript（配置已内联进 server.js），standalone 从 71MB 降到 45MB。
+
 ## 验证方式
 
 本项目不写 JVM/单元测试，改完转换逻辑用 curl 打真实文件验证：
@@ -65,4 +78,4 @@ curl -s -o out.pdf -w "%{http_code}\n" -F "file=@score.musicxml" -F "target=pdf"
 
 ## 环境依赖
 
-MuseScore 4 需本机安装，默认读 `/Applications/MuseScore 4.app/Contents/MacOS/mscore`，可用 `MSCORE_PATH` 覆盖。当前开发机版本 4.7.4。
+MuseScore 4 需本机安装（桌面版也不内置），默认读官方安装位置：macOS `/Applications/MuseScore 4.app/Contents/MacOS/mscore`，Windows `%ProgramFiles%\MuseScore 4\bin\MuseScore4.exe`，可用 `MSCORE_PATH` 覆盖。当前开发机版本 4.7.4。

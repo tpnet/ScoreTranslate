@@ -1,0 +1,26 @@
+# 桌面安装包。sidecar 复制的是构建机上的 bun，只能打本机架构的包，
+# 所以每个平台各用一台对应系统的 runner。在 Actions 页面手动触发，产物从运行详情里下载
+name: desktop
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: dtolnay/rust-toolchain@stable
+      - run: bun install --frozen-lockfile
+      - run: bun tauri build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ScoreTranslate-${{ runner.os }}
+          path: |
+            src-tauri/target/release/bundle/dmg/*.dmg
+            src-tauri/target/release/bundle/nsis/*.exe

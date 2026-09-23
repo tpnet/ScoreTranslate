@@ -18,7 +18,7 @@
 
 需要 [bun](https://bun.sh) 和 [MuseScore 4](https://musescore.org)（转换引擎，需本机安装）。
 
-MuseScore 默认读取路径为 macOS 的 `/Applications/MuseScore 4.app/Contents/MacOS/mscore`，其它系统或装在别处时用环境变量覆盖：
+MuseScore 默认读取官方安装包的位置：macOS 为 `/Applications/MuseScore 4.app/Contents/MacOS/mscore`，Windows 为 `C:\Program Files\MuseScore 4\bin\MuseScore4.exe`。装在别处时用环境变量覆盖：
 
 ```bash
 export MSCORE_PATH=/your/path/to/mscore
@@ -31,6 +31,20 @@ bun install && bun run dev
 ```
 
 打开 http://localhost:3000 。
+
+## 桌面版
+
+也可以打包成 macOS / Windows 桌面应用（Tauri，macOS 安装包约 32MB）：自带运行时，双击即用，不需要装 bun。**MuseScore 4 仍需单独安装**，没装时只有 Guitar Pro 转 MusicXML / gp / gp5 可用。
+
+构建需要 [Rust](https://rustup.rs) 工具链，只能构建本机平台的包：
+
+```bash
+bun install && bun tauri build
+```
+
+产物在 `src-tauri/target/release/bundle/`（macOS 为 `dmg/`，Windows 为 `nsis/`）。Windows 包也可以在 GitHub Actions 里手动运行 `desktop` 工作流构建。macOS 要求 13 及以上。
+
+应用没有正式签名，首次打开会被系统拦截：macOS 到「系统设置 → 隐私与安全性」点「仍要打开」（或执行 `xattr -dr com.apple.quarantine /Applications/ScoreTranslate.app`）；Windows 在 SmartScreen 提示里点「更多信息 → 仍要运行」。
 
 ## HTTP 接口
 
@@ -66,6 +80,7 @@ curl -F "file=@score.gp5" http://localhost:3000/api/tracks
 - `app/api/convert/route.ts` — 转换接口，负责校验与文件流响应
 - `app/api/tracks/route.ts` — 音轨名列表接口，供前端勾选导出哪些轨
 - `app/page.tsx` — 上传 / 选择目标格式 / 下载的单页界面
+- `src-tauri/` — 桌面版外壳：用随包的 bun 启动 Next.js standalone 服务，再开窗口加载
 
 ## 许可证
 

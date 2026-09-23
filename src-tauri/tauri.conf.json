@@ -1,0 +1,30 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "ScoreTranslate",
+  "version": "0.1.0",
+  "identifier": "io.github.tpnet.scoretranslate",
+  "build": {
+    "beforeBuildCommand": "bun run build && bun src-tauri/prepare-sidecar.mjs"
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app", "dmg", "nsis"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "externalBin": ["binaries/bun"],
+    "resources": {
+      "../.next/standalone/": "server/",
+      "../.next/static/": "server/.next/static/"
+    },
+    "macOS": {
+      "minimumSystemVersion": "13.0",
+      "signingIdentity": "-",
+      "entitlements": "Entitlements.plist"
+    }
+  }
+}

@@ -18,7 +18,7 @@ Some targets accept export options: DPI and margin trimming for PNG, paper size 
 
 You need [bun](https://bun.sh) and [MuseScore 4](https://musescore.org) — MuseScore acts as a conversion engine and must be installed locally.
 
-The default MuseScore path is the macOS one, `/Applications/MuseScore 4.app/Contents/MacOS/mscore`. On other platforms, or if you installed it elsewhere, override it with an environment variable:
+By default the official installer locations are used: `/Applications/MuseScore 4.app/Contents/MacOS/mscore` on macOS and `C:\Program Files\MuseScore 4\bin\MuseScore4.exe` on Windows. If you installed it elsewhere, override it with an environment variable:
 
 ```bash
 export MSCORE_PATH=/your/path/to/mscore
@@ -31,6 +31,20 @@ bun install && bun run dev
 ```
 
 Then open http://localhost:3000 .
+
+## Desktop app
+
+The project can also be packaged as a macOS / Windows desktop app (Tauri, ~32MB installer on macOS). It ships its own runtime, so no bun is needed — just double-click. **MuseScore 4 still has to be installed separately**; without it only Guitar Pro → MusicXML / gp / gp5 works.
+
+Building requires the [Rust](https://rustup.rs) toolchain and only produces a package for the host platform:
+
+```bash
+bun install && bun tauri build
+```
+
+Output goes to `src-tauri/target/release/bundle/` (`dmg/` on macOS, `nsis/` on Windows). The Windows package can also be built by manually running the `desktop` workflow in GitHub Actions. macOS 13 or later is required.
+
+The app is not signed with a paid certificate, so the OS blocks the first launch: on macOS go to System Settings → Privacy & Security and click "Open Anyway" (or run `xattr -dr com.apple.quarantine /Applications/ScoreTranslate.app`); on Windows click "More info → Run anyway" in the SmartScreen prompt.
 
 ## HTTP API
 
@@ -66,6 +80,7 @@ curl -F "file=@score.gp5" http://localhost:3000/api/tracks
 - `app/api/convert/route.ts` — conversion endpoint: validation and file-stream response
 - `app/api/tracks/route.ts` — track-name listing endpoint, used by the UI's track picker
 - `app/page.tsx` — single-page UI for upload, target selection and download
+- `src-tauri/` — desktop shell: starts the Next.js standalone server with the bundled bun, then opens a window on it
 
 ## License
 

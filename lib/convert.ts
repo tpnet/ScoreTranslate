@@ -8,8 +8,12 @@ import type { model } from "@coderline/alphatab";
 
 const run = promisify(execFile);
 
-const MSCORE =
-  process.env.MSCORE_PATH ?? "/Applications/MuseScore 4.app/Contents/MacOS/mscore";
+// 各平台 MuseScore 4 安装包的默认位置，MSCORE_PATH 可覆盖
+export const MSCORE =
+  process.env.MSCORE_PATH ??
+  (process.platform === "win32"
+    ? path.join(process.env.ProgramFiles ?? "C:\\Program Files", "MuseScore 4", "bin", "MuseScore4.exe")
+    : "/Applications/MuseScore 4.app/Contents/MacOS/mscore");
 const TIMEOUT_MS = 120_000;
 
 export const INPUT_EXTS = [
