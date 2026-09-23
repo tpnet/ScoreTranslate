@@ -8,9 +8,9 @@ A local sheet-music format converter that runs as a web app: pick a score file, 
 
 | Input | Output |
 | --- | --- |
-| `.mid` `.midi` `.gp` `.gpx` `.gp3` `.gp4` `.gp5` `.mxl` `.musicxml` `.xml` `.json` | `.mid` `.musicxml` `.xml` `.mxl` `.gp` `.gp5` `.json` `.mscz` `.pdf` `.png` `.png` long image |
+| `.mid` `.midi` `.gp` `.gpx` `.gp3` `.gp4` `.gp5` `.mxl` `.musicxml` `.xml` `.json` `.atex` | `.mid` `.musicxml` `.xml` `.mxl` `.gp` `.gp5` `.json` `.atex` `.mscz` `.pdf` `.png` `.png` long image |
 
-Maximum 50MB per file. PNG is exported page by page and zipped automatically when the score spans multiple pages; "PNG long image" stitches all pages vertically into a single image. `.json` is [alphaTab](https://alphatab.net)'s serialized score model, handy for rendering in the browser or further processing.
+Maximum 50MB per file. PNG is exported page by page and zipped automatically when the score spans multiple pages; "PNG long image" stitches all pages vertically into a single image. `.json` is [alphaTab](https://alphatab.net)'s serialized score model, handy for rendering in the browser or further processing; `.atex` is alphaTab's text notation format, [alphaTex](https://alphatab.net/docs/alphatex/syntax), which you can write by hand — syntax errors are reported with their line and column.
 
 Some targets accept export options: DPI and margin trimming for PNG, paper size and scaling for PDF, repeat unrolling for MIDI, staff type (tablature / standard notation) for MusicXML, PDF and PNG, and lyric merging for lead-sheet style scores. Multi-track scores can also be narrowed down to selected tracks, which works for every target format.
 

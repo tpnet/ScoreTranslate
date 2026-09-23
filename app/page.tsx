@@ -23,7 +23,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 
-const ACCEPT = ".mid,.midi,.gp,.gpx,.gp3,.gp4,.gp5,.mxl,.musicxml,.xml,.json";
+const ACCEPT = ".mid,.midi,.gp,.gpx,.gp3,.gp4,.gp5,.mxl,.musicxml,.xml,.json,.atex";
 
 const TARGETS = [
   { value: "mid", label: "MIDI (.mid)" },
@@ -33,13 +33,15 @@ const TARGETS = [
   { value: "gp", label: "Guitar Pro (.gp，GP7/8 可打开)" },
   { value: "gp5", label: "Guitar Pro 5 (.gp5，GP5 及以上可打开)" },
   { value: "json", label: "alphaTab JSON (.json)" },
+  { value: "atex", label: "alphaTex (.atex)" },
   { value: "mscz", label: "MuseScore (.mscz)" },
   { value: "pdf", label: "PDF (.pdf)" },
   { value: "png", label: "PNG 图片（多页自动打包 zip）" },
   { value: "png-long", label: "PNG 长图（多页纵向拼接）" },
 ];
 
-const GP_INPUTS = ["gp", "gpx", "gp3", "gp4", "gp5"];
+// 后端按 gp 系处理的输入（json / atex 先转成 .gp），MusicXML 目标缺省输出六线谱
+const GP_INPUTS = ["gp", "gpx", "gp3", "gp4", "gp5", "json", "atex"];
 const XML_TARGETS = ["musicxml", "xml", "mxl"];
 // 各目标格式提交时携带的配置字段；不在表里的格式无配置项
 const OPT_KEYS: Record<string, string[]> = {
@@ -150,7 +152,7 @@ export default function Home() {
           <CardTitle>乐谱格式转换</CardTitle>
           <CardDescription>
             支持 MIDI、Guitar Pro（gp / gpx / gp3-5）、MusicXML（mxl / musicxml /
-            xml）、alphaTab JSON 互转，并可导出 PDF 与图片。
+            xml）、alphaTab JSON、alphaTex 互转，并可导出 PDF 与图片。
           </CardDescription>
         </CardHeader>
 
