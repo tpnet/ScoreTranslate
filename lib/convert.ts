@@ -96,6 +96,21 @@ function reindexTracks(score: model.Score): void {
   score.tracks.forEach((t, i) => (t.index = i));
 }
 
+// Guitar Pro 自己写的和弦 ID 都是数字，MuseScore 读 .gp 时也按数字解析；而 alphaTex 来源的
+// ID 是 "c00" 这类名字编码、gp5 来源的是 GUID，全被解析成 0，所有和弦都显示成第一个。
+// 所以按谱表（写出器按谱表写和弦集合）把 ID 重排成 "0"、"1"……
+// 引用不区分大小写匹配：有的外部工具生成的 .gp，定义用小写 ID、引用却用和弦原名；
+// 仍对不上的引用清空，否则 MuseScore 会把它当成 0 号和弦显示
+function normalizeChordIds(score: model.Score): void {
+  for (const t of score.tracks) for (const st of t.staves) {
+    const chords = [...(st.chords ?? [])];
+    const to = new Map(chords.map(([k], i) => [k.toLowerCase(), String(i)]));
+    if (chords.length) st.chords = new Map(chords.map(([, c], i) => [String(i), c]));
+    for (const b of st.bars) for (const v of b.voices) for (const bt of v.beats)
+      if (bt.chordId) bt.chordId = to.get(bt.chordId.toLowerCase()) ?? null;
+  }
+}
+
 // 找歌词拍最多的音轨作为来源，把每拍歌词对齐拷贝到其余音轨同小节最近的拍上。
 // 幂等：目标拍原本就有歌词则跳过，重复调用不会叠加
 function mergeLyricsAcrossTracks(score: model.Score): void {
@@ -192,6 +207,7 @@ async function exportGpFamily(
   const score = alphaTab.importer.ScoreLoader.loadScoreFromBytes(bytes, settings);
   if (mergeLyrics) mergeLyricsAcrossTracks(score);
   filterTracks(score, tracks);
+  normalizeChordIds(score);
   if (target === "gp5") {
     const { exportGp5 } = await import("./gp5-writer");
     return exportGp5(score);
@@ -225,6 +241,7 @@ async function gpToXmlTarget(
   }
   if (mergeLyrics) mergeLyricsAcrossTracks(score);
   filterTracks(score, tracks);
+  normalizeChordIds(score);
   // TAB 需要弦号品格；MusicXML/MIDI 来源没有，就地指派（GP 来源原样保留）
   if (staffMode === "tab") {
     const { ensureFingerings } = await import("./gp5-writer");
@@ -378,6 +395,7 @@ export async function convertScore(
     const settings = new alphaTab.Settings();
     const score = inputExt === "json" ? await scoreFromAlphaTabJson(input) : await scoreFromAlphaTex(input);
     if (options.mergeLyrics) mergeLyricsAcrossTracks(score);
+    normalizeChordIds(score);
     // 音轨过滤留给下游的 gp 链路：这里导出的 .gp 重新导入后下标会重排
     input = new alphaTab.exporter.Gp7Exporter().export(score, settings);
     inputExt = "gp";

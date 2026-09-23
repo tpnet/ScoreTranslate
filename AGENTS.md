@@ -33,6 +33,8 @@ bun tauri build # 桌面安装包，内部先跑 next build，产物在 src-taur
 
 `tracks`（只导出选中音轨，对全部目标格式生效）统一在 alphaTab 模型上过滤，下标由 `listTracks` 给出——它和转换走同一条解析链路（gp 系 alphaTab 直连，其余先经 MuseScore 桥接成 MusicXML），下标才对得上。因此 pdf/png/mid/mscz 这些本来直接丢给 MuseScore 的目标，在选轨时被迫先过一遍 alphaTab：gp 输入指定了谱表类型走自研 MusicXML 序列化，未指定则重新导出只含选中轨的 `.gp` 交回 MuseScore，避免改变"跟随原谱"的渲染；非 gp 输入一律 MuseScore 桥接成 MusicXML 后重新序列化。**gp/gp5/json/atex 目标必须排除在这段桥接之外**——它们下面有自己的桥接，过两遍会按已过滤后的下标再过滤一次。过滤不重排 `track.index`——`gp-to-musicxml.ts` 用它拼 part id。atex 目标是例外：`AlphaTexExporter` 只在 `index === 0` 的音轨上写小节级信息（拍号、调号、速度、反复、段落），滤掉首轨会全部静默丢失，所以导出前由 `reindexTracks` 重排 index，并同步改键按 index 索引的 stylesheet 逐轨设置。
 
+和弦：MuseScore 读 .gp 时把和弦 ID 当数字解析，而 alphaTex 来源的 ID 是 `c00`、gp5 来源的是 GUID，会全被解析成 0，所有和弦都显示成第一个——所以 alphaTab 写 .gp 或 MusicXML 前一律先过 `normalizeChordIds` 重排成数字。MusicXML 的 `<harmony>` 把和弦名后缀原样放进 `kind` 的 `text`（MuseScore、alphaTab 都按它显示）；空后缀必须写 `major`，写 `other` 会被 MuseScore 显示成 "C°ther"。
+
 ## GP5 写出器（lib/gp5-writer.ts）
 
 - 字节布局逐字段**镜像 alphaTab 的 `Gp3To5Importer`**（node_modules/@coderline/alphatab/dist/alphaTab.core.mjs 中搜 `Gp3To5Importer`）的 v5.00 读取分支。改字段顺序前必须对照该解析器，任何一个字节错位都会毁掉整个文件的后续解析。

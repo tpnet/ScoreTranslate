@@ -34,6 +34,33 @@ const words = (text: string, italic = false) =>
 const wedge = (type: string) =>
   `<direction><direction-type><wedge type="${type}"/></direction-type></direction>`;
 
+// 和弦名后缀 → MusicXML kind。显示文字由 kind 的 text 属性原样给出（MuseScore、alphaTab
+// 都按它显示），kind 只供其他软件理解语义，表外的后缀写 other。空后缀必须映射成 major：
+// kind 为 other 又没有 text 时，MuseScore 会把 "other" 当文字显示出来
+const HARMONY_KINDS: Record<string, string> = {
+  "": "major", m: "minor", "7": "dominant", maj7: "major-seventh", M7: "major-seventh",
+  m7: "minor-seventh", dim: "diminished", dim7: "diminished-seventh", aug: "augmented",
+  "+": "augmented", m7b5: "half-diminished", mMaj7: "major-minor", "6": "major-sixth",
+  m6: "minor-sixth", "9": "dominant-ninth", m9: "minor-ninth", maj9: "major-ninth",
+  "11": "dominant-11th", "13": "dominant-13th", sus2: "suspended-second",
+  sus4: "suspended-fourth", sus: "suspended-fourth", "5": "power",
+};
+const alterOf = (acc: string) => [...acc].reduce((n, c) => n + (c === "#" || c === "♯" ? 1 : -1), 0);
+
+// 和弦名拆成根音 + 后缀 + 低音（如 "F#m7/E"）；拆不出根音的（N.C.、中文段落名等）按文字标注
+function harmonyXml(name: string): string {
+  const m = /^([A-G])([#b♯♭]*)(.*?)(?:\/([A-G])([#b♯♭]*))?$/.exec(name.trim());
+  if (!m) return words(esc(name));
+  const [, step, acc, suffix, bassStep, bassAcc = ""] = m;
+  const alter = (tag: string, a: number) => (a ? `<${tag}-alter>${a}</${tag}-alter>` : "");
+  return (
+    `<harmony><root><root-step>${step}</root-step>${alter("root", alterOf(acc))}</root>` +
+    `<kind${suffix ? ` text="${esc(suffix)}"` : ""}>${HARMONY_KINDS[suffix] ?? "other"}</kind>` +
+    (bassStep ? `<bass><bass-step>${bassStep}</bass-step>${alter("bass", alterOf(bassAcc))}</bass>` : "") +
+    `</harmony>`
+  );
+}
+
 // 推弦：不看 bendType，直接由点列推导——起始值>0 写预推，有上推写峰值，
 // 末值低于峰值写释放。bendPoint.value 单位是 1/4 音，bend-alter 单位是半音
 function bendXml(note: model.Note): string {
@@ -288,6 +315,8 @@ function measureXml(
     for (const beat of v.beats) {
       const grace = (beat.graceType as number) !== 0;
       const ticks = beatTicks(beat);
+      // 和弦名写在该拍位置（harmony 不占时值），休止拍上的和弦也保留
+      if (beat.chord?.name) xml += harmonyXml(beat.chord.name);
       if (beat.isRest) {
         if (grace) continue;
         prevPalmMute = false;
