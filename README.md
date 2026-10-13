@@ -14,6 +14,8 @@
 
 部分目标格式带导出选项：PNG 的 DPI 与裁边、PDF 的纸张与缩放、MIDI 的展开反复、MusicXML/PDF/PNG 的谱表类型（六线谱 / 五线谱）、弹唱谱的歌词并轨。多轨谱还可以只导出选中的音轨，对全部目标格式生效。
 
+PDF 选择「跟随原谱」时，如果 MuseScore 未能直接导入 Guitar Pro 文件并生成 PDF，会改经 MusicXML 重试，保留原谱的五线谱 / 六线谱显示设置。自动识别草稿中的错误时值仍需对照原谱校正。
+
 ## 环境准备
 
 需要 [bun](https://bun.sh) 和 [MuseScore 4](https://musescore.org)（转换引擎，需本机安装）。

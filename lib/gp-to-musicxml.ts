@@ -107,7 +107,7 @@ function beatTicks(beat: model.Beat): number {
 function noteXml(
   note: model.Note,
   beat: model.Beat,
-  opts: { isChord: boolean; stringed: boolean; stringCount: number; useFlats: boolean; voice: number; ticks: number },
+  opts: { isChord: boolean; stringed: boolean; stringCount: number; useFlats: boolean; voice: number; ticks: number; staffNumber?: number },
 ): string {
   const { isChord, stringed, stringCount, useFlats, voice, ticks } = opts;
   const grace = (beat.graceType as number) !== 0;
@@ -129,6 +129,7 @@ function noteXml(
   }
   if (note.isDead) xml += "<notehead>x</notehead>";
   else if (note.isGhost) xml += '<notehead parentheses="yes">normal</notehead>';
+  if (opts.staffNumber) xml += `<staff>${opts.staffNumber}</staff>`;
 
   const notations: string[] = [];
   if (note.isTieDestination) notations.push('<tied type="stop"/>');
@@ -212,7 +213,7 @@ function noteXml(
   }
   if (notations.length) xml += `<notations>${notations.join("")}</notations>`;
   // 歌词是 beat 级，写在和弦首音上
-  if (first && beat.lyrics) {
+  if (first && beat.lyrics && opts.staffNumber !== 2) {
     beat.lyrics.forEach((line, li) => {
       if (line) xml += `<lyric number="${li + 1}"><syllabic>single</syllabic><text>${esc(line)}</text></lyric>`;
     });
@@ -220,12 +221,13 @@ function noteXml(
   return xml + "</note>";
 }
 
-function restXml(beat: model.Beat, voice: number, ticks: number): string {
+function restXml(beat: model.Beat, voice: number, ticks: number, staffNumber?: number): string {
   const typeName = TYPE_NAMES[beat.duration as number];
   return (
     `<note><rest/><duration>${ticks}</duration><voice>${voice}</voice>` +
     (typeName ? `<type>${typeName}</type>` : "") +
     "<dot/>".repeat(beat.dots) +
+    (staffNumber ? `<staff>${staffNumber}</staff>` : "") +
     "</note>"
   );
 }
@@ -238,6 +240,7 @@ function measureXml(
   useFlats: boolean,
   tabStaff: boolean,
   state: { dyn: number; wedge: number },
+  bothStaves = false,
 ): string {
   const bar = staff.bars[barIndex];
   const mb = bar.masterBar;
@@ -264,12 +267,17 @@ function measureXml(
     );
   }
   if (partFirstBar) {
+    if (bothStaves) attrs.push("<staves>2</staves>");
     if (stringed && !tabStaff) {
       // 标准五线谱：吉他惯用的低八度高音谱号，音高按实际发声写，谱面即正确八度
-      attrs.push(`<clef><sign>G</sign><line>2</line><clef-octave-change>-1</clef-octave-change></clef>`);
-    } else if (stringed) {
-      attrs.push(`<clef><sign>TAB</sign><line>5</line></clef>`);
-      let details = `<staff-details><staff-lines>${stringCount}</staff-lines>`;
+      attrs.push(`<clef${bothStaves ? ' number="1"' : ""}><sign>G</sign><line>2</line><clef-octave-change>-1</clef-octave-change></clef>`);
+    } else if (!stringed) {
+      attrs.push(`<clef><sign>${staff.isPercussion ? "percussion" : "G"}</sign></clef>`);
+    }
+    if (stringed && (tabStaff || bothStaves)) {
+      const number = bothStaves ? ' number="2"' : "";
+      attrs.push(`<clef${number}><sign>TAB</sign><line>5</line></clef>`);
+      let details = `<staff-details${number}><staff-lines>${stringCount}</staff-lines>`;
       // staff-tuning 的 line 1 是谱表最底线（最低音弦）；alphaTab tuning[0] 是最高音弦
       for (let line = 1; line <= stringCount; line++) {
         const midi = staff.tuning[stringCount - line];
@@ -284,8 +292,6 @@ function measureXml(
       if (staff.capo > 0) details += `<capo>${staff.capo}</capo>`;
       details += `</staff-details>`;
       attrs.push(details);
-    } else {
-      attrs.push(`<clef><sign>${staff.isPercussion ? "percussion" : "G"}</sign></clef>`);
     }
   }
   if (attrs.length) xml += `<attributes>${attrs.join("")}</attributes>`;
@@ -304,10 +310,19 @@ function measureXml(
   }
 
   const voices = bar.voices.filter((v) => !v.isEmpty);
+  const writtenVoices = (bothStaves ? [1, 2] : [undefined]).flatMap((staffNumber) =>
+    voices.map((v, vi) => ({ v, vi, staffNumber })),
+  );
   if (voices.length === 0) {
-    xml += `<note><rest measure="yes"/><duration>${Math.round((DIVISIONS * 4 * mb.timeSignatureNumerator) / mb.timeSignatureDenominator)}</duration><voice>1</voice></note>`;
+    const ticks = Math.round((DIVISIONS * 4 * mb.timeSignatureNumerator) / mb.timeSignatureDenominator);
+    for (const staffNumber of bothStaves ? [1, 2] : [undefined]) {
+      if (staffNumber === 2) xml += `<backup><duration>${ticks}</duration></backup>`;
+      xml += `<note><rest measure="yes"/><duration>${ticks}</duration><voice>${staffNumber ?? 1}</voice>` +
+        (staffNumber ? `<staff>${staffNumber}</staff>` : "") + "</note>";
+    }
   }
-  voices.forEach((v, vi) => {
+  writtenVoices.forEach(({ v, vi, staffNumber }, writtenIndex) => {
+    const voice = vi + 1 + (staffNumber === 2 ? voices.length : 0);
     let written = 0;
     // 闷音/延音按连续段标记：段首写一次文字（GP 是逐音符标记，谱面惯例是段首标注）
     let prevPalmMute = false;
@@ -316,62 +331,65 @@ function measureXml(
       const grace = (beat.graceType as number) !== 0;
       const ticks = beatTicks(beat);
       // 和弦名写在该拍位置（harmony 不占时值），休止拍上的和弦也保留
-      if (beat.chord?.name) xml += harmonyXml(beat.chord.name);
+      if (beat.chord?.name && staffNumber !== 2) xml += harmonyXml(beat.chord.name);
       if (beat.isRest) {
         if (grace) continue;
         prevPalmMute = false;
         prevLetRing = false;
-        xml += restXml(beat, vi + 1, ticks);
+        xml += restXml(beat, voice, ticks, staffNumber);
       } else {
-        const palmMute = beat.notes.some((n) => n.isPalmMute);
-        if (palmMute && !prevPalmMute) xml += words("P.M.", true);
-        prevPalmMute = palmMute;
-        const letRing = beat.notes.some((n) => n.isLetRing);
-        if (letRing && !prevLetRing) xml += words("let ring", true);
-        prevLetRing = letRing;
-        if (beat.slap) xml += words("slap");
-        if ((beat.rasgueado as number) !== 0) xml += words("rasg.", true);
-        if ((beat.whammyBarType as number) !== 0) xml += words("w/bar");
-        if (beat.text) xml += words(esc(beat.text));
-        // 力度与渐强渐弱只在声部 1 写一份，避免多声部重复标记
-        if (vi === 0) {
-          const dyn = beat.dynamics as number;
-          if (dyn !== state.dyn) {
-            if (state.dyn >= 0 && DYNAMIC_NAMES[dyn]) {
-              xml += `<direction placement="below"><direction-type><dynamics><${DYNAMIC_NAMES[dyn]}/></dynamics></direction-type></direction>`;
+        if (staffNumber !== 2) {
+          const palmMute = beat.notes.some((n) => n.isPalmMute);
+          if (palmMute && !prevPalmMute) xml += words("P.M.", true);
+          prevPalmMute = palmMute;
+          const letRing = beat.notes.some((n) => n.isLetRing);
+          if (letRing && !prevLetRing) xml += words("let ring", true);
+          prevLetRing = letRing;
+          if (beat.slap) xml += words("slap");
+          if ((beat.rasgueado as number) !== 0) xml += words("rasg.", true);
+          if ((beat.whammyBarType as number) !== 0) xml += words("w/bar");
+          if (beat.text) xml += words(esc(beat.text));
+          // 力度与渐强渐弱只在声部 1 写一份，避免多声部重复标记
+          if (vi === 0) {
+            const dyn = beat.dynamics as number;
+            if (dyn !== state.dyn) {
+              if (state.dyn >= 0 && DYNAMIC_NAMES[dyn]) {
+                xml += `<direction placement="below"><direction-type><dynamics><${DYNAMIC_NAMES[dyn]}/></dynamics></direction-type></direction>`;
+              }
+              state.dyn = dyn;
             }
-            state.dyn = dyn;
+            // 渐强/渐弱跨小节跟踪（state.wedge），连续段只写一条楔形线
+            const cres = beat.crescendo as number;
+            if (cres !== state.wedge) {
+              if (state.wedge) xml += wedge("stop");
+              if (cres) xml += wedge(cres === 1 ? "crescendo" : "diminuendo");
+              state.wedge = cres;
+            }
           }
-          // 渐强/渐弱跨小节跟踪（state.wedge），连续段只写一条楔形线
-          const cres = beat.crescendo as number;
-          if (cres !== state.wedge) {
-            if (state.wedge) xml += wedge("stop");
-            if (cres) xml += wedge(cres === 1 ? "crescendo" : "diminuendo");
-            state.wedge = cres;
-          }
+          // fade in/out/swell：围绕该拍写一对楔形线
+          const fade = beat.fade as number;
+          if (fade) xml += wedge(fade === 2 ? "diminuendo" : "crescendo");
         }
-        // fade in/out/swell：围绕该拍写一对楔形线
-        const fade = beat.fade as number;
-        if (fade) xml += wedge(fade === 2 ? "diminuendo" : "crescendo");
         beat.notes.forEach((n, ni) => {
           xml += noteXml(n, beat, {
             isChord: ni > 0,
             stringed,
             stringCount,
             useFlats,
-            voice: vi + 1,
+            voice,
             ticks,
+            staffNumber,
           });
         });
-        if (fade) xml += wedge("stop");
+        if (staffNumber !== 2 && beat.fade) xml += wedge("stop");
       }
       if (!grace) written += ticks;
     }
-    if (vi === 0 && partLastBar && state.wedge) {
+    if (vi === 0 && staffNumber !== 2 && partLastBar && state.wedge) {
       xml += wedge("stop");
       state.wedge = 0;
     }
-    if (vi < voices.length - 1 && written > 0) {
+    if (writtenIndex < writtenVoices.length - 1 && written > 0) {
       xml += `<backup><duration>${written}</duration></backup>`;
     }
   });
@@ -384,7 +402,7 @@ function measureXml(
   return xml + "</measure>";
 }
 
-export function scoreToMusicXml(score: model.Score, staffMode: "tab" | "standard" = "tab"): string {
+export function scoreToMusicXml(score: model.Score, staffMode: "tab" | "standard" | "original" = "tab"): string {
   // 每个（音轨, 谱表）对导出为一个 part；GP 吉他轨通常只有一个谱表
   const parts: { id: string; name: string; track: model.Track; staff: model.Staff }[] = [];
   for (const track of score.tracks) {
@@ -417,8 +435,10 @@ export function scoreToMusicXml(score: model.Score, staffMode: "tab" | "standard
       let xml = `<part id="${id}">`;
       // 力度与渐强渐弱跨小节跟踪，只在变化时写记号
       const state = { dyn: -1, wedge: 0 };
+      const tabStaff = staffMode === "tab" || (staffMode === "original" && staff.showTablature && !staff.showStandardNotation);
+      const bothStaves = staffMode === "original" && staff.isStringed && !staff.isPercussion && staff.showTablature && staff.showStandardNotation;
       for (let i = 0; i < staff.bars.length; i++) {
-        xml += measureXml(staff, i, i === 0, i === staff.bars.length - 1, useFlats, staffMode === "tab", state);
+        xml += measureXml(staff, i, i === 0, i === staff.bars.length - 1, useFlats, tabStaff, state, bothStaves);
       }
       return xml + "</part>";
     })

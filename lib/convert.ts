@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -227,7 +227,7 @@ async function gpToXmlTarget(
   input: Uint8Array,
   target: OutputExt,
   baseName: string,
-  staffMode: "tab" | "standard" = "tab",
+  staffMode: "tab" | "standard" | "original" = "tab",
   mergeLyrics = false,
   tracks?: number[],
 ): Promise<ConvertResult> {
@@ -493,6 +493,17 @@ export async function convertScore(
       }
     }
     await mscore(inPath, outPath, args);
+
+    // MuseScore 的 GP 导入器遇到长于小节的音符会失败，MusicXML 导入可处理。
+    if (
+      isGpInput && target === "pdf" && !options.staffMode &&
+      !(await access(outPath).then(() => true, () => false))
+    ) {
+      const bridged = await gpToXmlTarget(input, "musicxml", baseName, "original", options.mergeLyrics);
+      inPath = path.join(dir, "fallback.musicxml");
+      await writeFile(inPath, bridged.data);
+      await mscore(inPath, outPath, args);
+    }
 
     if (target === "png" || target === "png-long") {
       // MuseScore 按页导出 output-1.png、output-2.png…，多页时打包为 zip

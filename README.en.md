@@ -14,6 +14,8 @@ Maximum 50MB per file. PNG is exported page by page and zipped automatically whe
 
 Some targets accept export options: DPI and margin trimming for PNG, paper size and scaling for PDF, repeat unrolling for MIDI, staff type (tablature / standard notation) for MusicXML, PDF and PNG, and lyric merging for lead-sheet style scores. Multi-track scores can also be narrowed down to selected tracks, which works for every target format.
 
+For PDF with the original staff layout, if MuseScore cannot produce a PDF directly from Guitar Pro input, conversion retries through MusicXML, retaining the original standard notation / tablature visibility. Incorrect durations in recognition drafts still need manual correction against the source score.
+
 ## Prerequisites
 
 You need [bun](https://bun.sh) and [MuseScore 4](https://musescore.org) — MuseScore acts as a conversion engine and must be installed locally.
