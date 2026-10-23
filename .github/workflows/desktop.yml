@@ -3,6 +3,11 @@ name: desktop
 
 on:
   workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -13,13 +18,49 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: oven-sh/setup-bun@v2
       - uses: dtolnay/rust-toolchain@stable
+      - name: Check release version
+        if: github.event_name == 'release'
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          bun -e 'const { version } = await Bun.file("src-tauri/tauri.conf.json").json(); if (process.env.RELEASE_TAG !== `v${version}`) throw new Error("Release tag must match app version");'
       - run: bun install --frozen-lockfile
       - run: bun tauri build
+      - name: Prepare Windows portable EXE
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = (Get-Content src-tauri/tauri.conf.json | ConvertFrom-Json).version
+          Copy-Item src-tauri/target/release/score-translate.exe "src-tauri/target/release/bundle/ScoreTranslate_${version}_x64-portable.exe"
       - uses: actions/upload-artifact@v4
         with:
           name: ScoreTranslate-${{ matrix.os }}
+          if-no-files-found: error
           path: |
             src-tauri/target/release/bundle/dmg/*.dmg
             src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/*-portable.exe
+
+  upload-release:
+    if: github.event_name == 'release'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          gh release upload "$RELEASE_TAG" artifacts/dmg/*.dmg artifacts/nsis/*.exe artifacts/*-portable.exe --clobber

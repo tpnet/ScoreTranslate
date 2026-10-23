@@ -55,7 +55,9 @@ Bun 同时提供 `dist/` 静态页面和转换 API，默认只监听 `127.0.0.1:
 bun install && bun tauri build
 ```
 
-产物在 `src-tauri/target/release/bundle/`（macOS 为 `dmg/`，Windows 为 `nsis/`）。Windows 包也可以在 GitHub Actions 里手动运行 `desktop` 工作流构建。macOS 要求 13 及以上。
+产物在 `src-tauri/target/release/bundle/`（macOS 为 `dmg/`，Windows 为 `nsis/`）。macOS 要求 13 及以上。
+
+GitHub Actions 的 `desktop` 工作流支持手动构建，也会在发布 Release 时自动构建三平台安装包并上传到该 Release。Windows 同时提供安装版 `ScoreTranslate_<版本>_x64-setup.exe` 和免安装版 `ScoreTranslate_<版本>_x64-portable.exe`，无需再从安装包中提取主程序。手动构建只保存 Actions 产物，不修改 Release。发布前需同步更新项目版本号，Release 标签使用对应的 `v<版本>`。免安装版需要系统已有 WebView2 Runtime，MuseScore 4 仍需另装。
 
 应用没有正式签名，首次打开会被系统拦截：macOS 到「系统设置 → 隐私与安全性」点「仍要打开」（或执行 `xattr -dr com.apple.quarantine /Applications/ScoreTranslate.app`）；Windows 在 SmartScreen 提示里点「更多信息 → 仍要运行」。
 

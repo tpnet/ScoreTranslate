@@ -55,7 +55,9 @@ Building requires the [Rust](https://rustup.rs) toolchain and only produces a pa
 bun install && bun tauri build
 ```
 
-Output goes to `src-tauri/target/release/bundle/` (`dmg/` on macOS, `nsis/` on Windows). The Windows package can also be built by manually running the `desktop` workflow in GitHub Actions. macOS 13 or later is required.
+Output goes to `src-tauri/target/release/bundle/` (`dmg/` on macOS, `nsis/` on Windows). macOS 13 or later is required.
+
+The `desktop` GitHub Actions workflow supports manual builds and automatically builds and uploads all platform packages when a Release is published. Windows includes both `ScoreTranslate_<version>_x64-setup.exe` and `ScoreTranslate_<version>_x64-portable.exe`; extracting the main executable from the installer is no longer necessary. Manual builds only save Actions artifacts and do not modify a Release. Update the project version before publishing and use the matching `v<version>` Release tag. The portable EXE requires an installed WebView2 Runtime; MuseScore 4 remains a separate dependency.
 
 The app is not signed with a paid certificate, so the OS blocks the first launch: on macOS go to System Settings → Privacy & Security and click "Open Anyway" (or run `xattr -dr com.apple.quarantine /Applications/ScoreTranslate.app`); on Windows click "More info → Run anyway" in the SmartScreen prompt.
 
