@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "ScoreTranslate",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "identifier": "io.github.tpnet.scoretranslate",
   "build": {
     "beforeDevCommand": "bun x --no-install vite",
