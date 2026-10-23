@@ -28,7 +28,7 @@ scope.onmessage = async ({ data }: MessageEvent<Job | RenderReply>) => {
   try {
     const result = action === "tracks"
       ? await listTracks(input, ext, render)
-      : await convertScore(input, ext, target, filename.replace(/\.[^.]+$/, "") || "score", options, render);
+      : await convertScore(input, ext, target, filename.replace(/\.gp\.json$|\.[^.]+$/i, "") || "score", options, render);
     const transfer = Array.isArray(result) ? [] : [result.data.buffer];
     scope.postMessage({ type: "result", id, result } satisfies WorkerReply, transfer);
   } catch (e) {

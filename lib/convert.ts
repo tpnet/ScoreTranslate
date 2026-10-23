@@ -1,4 +1,5 @@
 import JSZip from "jszip";
+import { songJsonToXml } from "./song-json";
 import type { model } from "@coderline/alphatab";
 import { CONTENT_TYPES, type ConvertOptions, type ConvertResult, type OutputExt, type Render } from "./formats";
 
@@ -175,8 +176,30 @@ async function gpToXmlTarget(
   };
 }
 
-async function scoreFromAlphaTabJson(input: Uint8Array): Promise<model.Score> {
+async function scoreFromAlphaTabJson(input: Uint8Array, options: ConvertOptions = {}, title = "歌曲"): Promise<model.Score> {
   const alphaTab = await import("@coderline/alphatab");
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(new TextDecoder().decode(input));
+  } catch {
+    throw new Error("转换失败：无法解析该 JSON");
+  }
+  const xml = songJsonToXml(parsed, options, title);
+  if (xml) {
+    const score = alphaTab.importer.ScoreLoader.loadScoreFromBytes(new TextEncoder().encode(xml), new alphaTab.Settings());
+    // 歌曲 JSON 只有 MIDI 音高，MusicXML 导入不会提供调弦和弦品。
+    // 必须在首次 GP 序列化前补齐，否则 GP 桌面端会显示六根 C-1 并无法正常播放。
+    const notes = score.tracks.flatMap(t => t.staves.flatMap(st => st.bars.flatMap(b =>
+      b.voices.flatMap(v => v.beats.flatMap(bt => bt.notes)))));
+    const pitches = notes.map(n => n.realValue);
+    const { ensureFingerings } = await import("./gp5-writer");
+    ensureFingerings(score);
+    // 现有弦品算法允许八度折叠；歌曲 JSON 不可静默移调或丢音，放不下时明确报错。
+    if (notes.some((n, i) => n.string < 1 || n.fret < 0 || n.realValue !== pitches[i])) {
+      throw new Error("歌曲音域或同时发声音数超出当前弦品范围，无法无损导出 GP");
+    }
+    return score;
+  }
   // alphaTab 1.8 的反序列化按全小写键做大小写敏感匹配，而旧版 alphaTab
   // 导出的是 camelCase 键（如 masterBars），会被整体跳过导致 finish 崩溃。
   // 递归把键转小写即可同时兼容新旧两种导出
@@ -187,7 +210,7 @@ async function scoreFromAlphaTabJson(input: Uint8Array): Promise<model.Score> {
         ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k.toLowerCase(), lowerKeys(x)]))
         : v;
   try {
-    const obj = lowerKeys(JSON.parse(new TextDecoder().decode(input)));
+    const obj = lowerKeys(parsed);
     return alphaTab.model.JsonConverter.jsObjectToScore(obj, new alphaTab.Settings());
   } catch {
     throw new Error("转换失败：无法解析该 alphaTab JSON");
@@ -250,7 +273,7 @@ export async function convertScore(
   if (inputExt === "json" || inputExt === "atex") {
     const alphaTab = await import("@coderline/alphatab");
     const settings = new alphaTab.Settings();
-    const score = inputExt === "json" ? await scoreFromAlphaTabJson(input) : await scoreFromAlphaTex(input);
+    const score = inputExt === "json" ? await scoreFromAlphaTabJson(input, options, baseName) : await scoreFromAlphaTex(input);
     if (options.mergeLyrics) mergeLyricsAcrossTracks(score);
     normalizeChordIds(score);
     // 音轨过滤留给下游的 gp 链路：这里导出的 .gp 重新导入后下标会重排

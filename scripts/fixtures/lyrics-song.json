@@ -1,0 +1,109 @@
+{
+  "title": "歌曲 <&>",
+  "originalSinger": "作者",
+  "tempo": 89,
+  "beat": "4/4",
+  "trackConfigs": [
+    {
+      "index": 1,
+      "name": "LEAD 1"
+    }
+  ],
+  "lyrics": [
+    {
+      "bars": [
+        {
+          "bar": 0,
+          "beats": [
+            {
+              "beat": 0,
+              "chord": {
+                "mainKey": "C"
+              },
+              "words": [
+                {
+                  "start": 0,
+                  "word": "一"
+                }
+              ],
+              "notes": [
+                {
+                  "note": 1,
+                  "upOctave": 0,
+                  "start": 0,
+                  "length": 20,
+                  "velocity": 80
+                }
+              ],
+              "extraTracks": [
+                {
+                  "index": 1,
+                  "notes": [
+                    {
+                      "note": 8,
+                      "upOctave": -1,
+                      "start": 0,
+                      "length": 8
+                    },
+                    {
+                      "note": 12,
+                      "upOctave": -1,
+                      "start": 4,
+                      "length": 8
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "bars": [
+        {
+          "bar": 0,
+          "beats": [
+            {
+              "beat": 0,
+              "chord": {
+                "mainKey": "A",
+                "attachKey": "m"
+              },
+              "extraTracks": [
+                {
+                  "index": 1,
+                  "notes": [
+                    {
+                      "note": 10,
+                      "upOctave": -1,
+                      "start": 0,
+                      "length": 16
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "beat": 1,
+              "words": [
+                {
+                  "start": 0,
+                  "word": "二"
+                }
+              ],
+              "notes": [
+                {
+                  "note": 3,
+                  "upOctave": 0,
+                  "start": 0,
+                  "length": 4
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

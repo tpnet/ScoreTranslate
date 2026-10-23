@@ -1,0 +1,76 @@
+[
+  [
+    {
+      "beat": 4,
+      "chord": {
+        "name": "C",
+        "section": "Verse",
+        "tracks": [
+          {
+            "type": "VOCAL",
+            "index": 0,
+            "midi_notes": [
+              {
+                "note": 60,
+                "start_tick": 0,
+                "end_tick": 2400,
+                "words": "一",
+                "velocity": 80
+              }
+            ]
+          },
+          {
+            "type": "LEAD",
+            "index": 1,
+            "midi_notes": [
+              {
+                "note": 55,
+                "start_tick": 0,
+                "end_tick": 960
+              },
+              {
+                "note": 59,
+                "start_tick": 480,
+                "end_tick": 1440
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  [
+    {
+      "beat": 4,
+      "chord": {
+        "name": "Am",
+        "section": "Chorus",
+        "tracks": [
+          {
+            "type": "VOCAL",
+            "index": 0,
+            "midi_notes": [
+              {
+                "note": 62,
+                "start_tick": 480,
+                "end_tick": 960,
+                "words": "二"
+              }
+            ]
+          },
+          {
+            "type": "LEAD",
+            "index": 1,
+            "midi_notes": [
+              {
+                "note": 57,
+                "start_tick": 0,
+                "end_tick": 1920
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+]
