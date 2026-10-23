@@ -118,6 +118,10 @@ export default function Home() {
       const form = new FormData();
       form.append("file", file);
       form.append("target", target);
+      if (inputExt === "json") {
+        if (opts.jsonTempo) form.append("jsonTempo", opts.jsonTempo);
+        if (opts.jsonMiddleC) form.append("jsonMiddleC", opts.jsonMiddleC);
+      }
       for (const key of OPT_KEYS[target] ?? []) {
         if (opts[key]) form.append(key, opts[key]);
       }
@@ -152,7 +156,7 @@ export default function Home() {
           <CardTitle>乐谱格式转换</CardTitle>
           <CardDescription>
             支持 MIDI、Guitar Pro（gp / gpx / gp3-5）、MusicXML（mxl / musicxml /
-            xml）、alphaTab JSON、alphaTex 互转，并可导出 PDF 与图片。
+            xml）、alphaTab / LiberLive / GP 时间线 JSON、alphaTex 互转，并可导出 PDF 与图片。
           </CardDescription>
         </CardHeader>
 
@@ -205,7 +209,7 @@ export default function Home() {
             </Select>
           </Row>
 
-          {(hasOpts || trackList) && (
+          {(hasOpts || trackList || inputExt === "json") && (
             <div className="ml-3 flex flex-col gap-3 border-l-2 pl-4">
               {(target === "png" || target === "png-long") && (
                 <>
@@ -229,6 +233,26 @@ export default function Home() {
                       onChange={(e) => setOpt("trim")(e.target.value)}
                     />
                   </Row>
+                </>
+              )}
+
+              {inputExt === "json" && (
+                <>
+                  <Row label="歌曲速度 BPM">
+                    <Input type="number" min={20} max={400} placeholder="原始谱自动读取；GP 时间线默认 120"
+                      value={opts.jsonTempo ?? ""} onChange={(e) => setOpt("jsonTempo")(e.target.value)} />
+                  </Row>
+                  <Row label="原始谱八度">
+                    <Select value={opts.jsonMiddleC ?? "60"} onValueChange={setOpt("jsonMiddleC")}>
+                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="48">C3（48）</SelectItem>
+                        <SelectItem value="60">C4（60，默认）</SelectItem>
+                        <SelectItem value="72">C5（72）</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </Row>
+                  <p className="text-xs text-muted-foreground">八度仅用于 LiberLive 原始谱；GP 时间线保留已有 MIDI 音高。原始谱暂支持 4/4，不叠加设备调性偏移。</p>
                 </>
               )}
 

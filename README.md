@@ -10,7 +10,7 @@
 | --- | --- |
 | `.mid` `.midi` `.gp` `.gpx` `.gp3` `.gp4` `.gp5` `.mxl` `.musicxml` `.xml` `.json` `.atex` | `.mid` `.musicxml` `.xml` `.mxl` `.gp` `.gp5` `.json` `.atex` `.mscz` `.pdf` `.png` `.png` 长图 |
 
-单文件上限 50MB。PNG 按页导出，多页时自动打包成 zip；「PNG 长图」把所有页纵向拼成单张图。`.json` 是 [alphaTab](https://alphatab.net) 的乐谱模型序列化格式，便于在网页端直接渲染或做二次处理；`.atex` 是 alphaTab 的文本谱格式 [alphaTex](https://alphatab.net/docs/alphatex/syntax)，可以直接手写，语法有误时会提示出错的行列。
+单文件上限 50MB。PNG 按页导出，多页时自动打包成 zip；「PNG 长图」把所有页纵向拼成单张图。`.json` 支持 LL 原始歌曲详情（`lyrics-*.json`）、二维 GP 时间线（`*.gp.json`），以及 [alphaTab](https://alphatab.net) 的乐谱模型序列化格式，便于在网页端直接渲染或做二次处理；`.atex` 是 alphaTab 的文本谱格式 [alphaTex](https://alphatab.net/docs/alphatex/syntax)，可以直接手写，语法有误时会提示出错的行列。
 
 部分目标格式带导出选项：PNG 的 DPI 与裁边、PDF 的纸张与缩放、MIDI 的展开反复、MusicXML/PDF/PNG 的谱表类型（六线谱 / 五线谱）、弹唱谱的歌词并轨。多轨谱还可以只导出选中的音轨，对全部目标格式生效。
 
@@ -87,3 +87,23 @@ curl -F "file=@score.gp5" http://localhost:3000/api/tracks
 ## 许可证
 
 [MIT](LICENSE)
+
+## LiberLive / GP 时间线 JSON 转 GP
+
+上传原始 `lyrics-*.json` 或此前生成的二维 `.gp.json`，目标选择 **Guitar Pro (.gp)** 即可。不要上传仅含文件索引的 `song.json`。原始歌曲详情自动读取标题、作者与 BPM；二维时间线没有速度元数据，在「歌曲速度 BPM」填写原曲速度（《普通朋友》为 **89**；留空默认 120）。也可在 HTTP 表单传入 `jsonTempo=89`。
+
+原始谱目前支持 4/4，默认 `note=1, upOctave=0` 对应 C4（MIDI 60），不叠加 `tone/leadNote`。若试听确认相差八度，可在「原始谱八度」选择 C3/C5（HTTP `jsonMiddleC=48/72`）。二维时间线已经有 MIDI 音高，不再应用这个设置。设备音色、自动伴奏与扩展控制事件不转换；各旋律轨先用钢琴音色。力度折合 GP 支持的记谱档位，歌词首尾空白由导入器规范化。
+
+转换保留独立音轨、歌词、和弦及段落，跨小节与重叠长音用连音线保留时长。只导出选中音轨和现有歌词并轨功能继续适用。`.gp` 为 GP7/8 文件，不是 JSON 改扩展名。
+
+维护验证：按本项目约定用真实文件请求接口，并回读生成的 GP 比较所有音符（合并连音线后）：
+
+```sh
+bun scripts/verify-song-gp.ts /path/to/source.gp.json /path/to/output.gp
+```
+
+《普通朋友》两种输入均已核对：86 小节、5 音轨、957 个音符的音高与起止 tick 一致，BPM 89；歌词内容一致（忽略首尾空白）。音高基准仍以试听确认为准。
+
+独立 MuseScore 4 回读能打开全部 5 轨和 86 小节；其 GP 导入器会把结尾 LEAD 3 的一个 G3 长音（480 PPQ 下 161400–165120）拆成 161400–161520 与 161520–165120 两次起音。alphaTab 回读同一 GP 时该连音线完整。此项跨软件兼容性差异尚未在 Guitar Pro 桌面端试听确认。
+
+歌曲 JSON 导出 GP 前会补齐标准调弦及弦号、品位，避免 Guitar Pro 将缺失调弦显示成六根 C-1。若弦品分配需要移调或无法容纳全部音符，转换会报错，不静默折叠音高。回读脚本同时校验调弦、弦品与 MIDI 音高一致；《普通朋友》修复版全部 957 音符通过，MuseScore 可渲染非静音 WAV。Guitar Pro 桌面端实际发声仍需试听确认。
