@@ -10,7 +10,7 @@
 | --- | --- |
 | `.mid` `.midi` `.gp` `.gpx` `.gp3` `.gp4` `.gp5` `.mxl` `.musicxml` `.xml` `.json` `.atex` | `.mid` `.musicxml` `.xml` `.mxl` `.gp` `.gp5` `.json` `.atex` `.mscz` `.pdf` `.png` `.png` 长图 |
 
-单文件上限 50MB。PNG 按页导出，多页时自动打包成 zip；「PNG 长图」把所有页纵向拼成单张图。`.json` 支持 LiberLive 原始歌曲详情（`lyrics-*.json`）、二维 GP 时间线（`*.gp.json`）及 [alphaTab](https://alphatab.net) 的乐谱模型序列化格式，便于在网页端直接渲染或做二次处理；`.atex` 是 alphaTab 的文本谱格式 [alphaTex](https://alphatab.net/docs/alphatex/syntax)，可以直接手写，语法有误时会提示出错的行列。
+单文件上限 50MB。PNG 按页导出，多页时自动打包成 zip；「PNG 长图」把所有页纵向拼成单张图。`.json` 支持 LL 原始歌曲详情（`lyrics-*.json`）、二维 GP 时间线（`*.gp.json`）及 [alphaTab](https://alphatab.net) 的乐谱模型序列化格式，便于在网页端直接渲染或做二次处理；`.atex` 是 alphaTab 的文本谱格式 [alphaTex](https://alphatab.net/docs/alphatex/syntax)，可以直接手写，语法有误时会提示出错的行列。
 
 部分目标格式带导出选项：PNG 的 DPI 与裁边、PDF 的纸张与缩放、MIDI 的展开反复、MusicXML/PDF/PNG 的谱表类型（六线谱 / 五线谱）、弹唱谱的歌词并轨。多轨谱还可以只导出选中的音轨，对全部目标格式生效。
 
@@ -116,7 +116,7 @@ curl -F "file=@score.gp5" http://localhost:3000/api/tracks
 
 [MIT](LICENSE)
 
-## LiberLive / GP 时间线 JSON 转 GP
+## LL / GP 时间线 JSON 转 GP
 
 上传原始 `lyrics-*.json` 或此前生成的二维 `.gp.json`，目标选择 **Guitar Pro (.gp)** 即可。不要上传仅含文件索引的 `song.json`。原始歌曲详情自动读取标题、作者与 BPM；二维时间线没有速度元数据，在「歌曲速度 BPM」填写原曲速度（《普通朋友》为 **89**；留空默认 120）。也可在 HTTP 表单传入 `jsonTempo=89`。
 

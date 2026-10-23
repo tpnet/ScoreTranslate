@@ -116,9 +116,9 @@ curl -F "file=@score.gp5" http://localhost:3000/api/tracks
 
 [MIT](LICENSE)
 
-## LiberLive / GP timeline JSON
+## LL / GP timeline JSON
 
-Upload a LiberLive `lyrics-*.json` song detail file or a two-dimensional `*.gp.json` timeline, then select Guitar Pro (.gp). File-index-only `song.json` files are not supported. Titles, artist and tempo are read from raw songs; timelines default to 120 BPM. Override tempo with the “歌曲速度 BPM” field or HTTP `jsonTempo` (20–400).
+Upload a LL `lyrics-*.json` song detail file or a two-dimensional `*.gp.json` timeline, then select Guitar Pro (.gp). File-index-only `song.json` files are not supported. Titles, artist and tempo are read from raw songs; timelines default to 120 BPM. Override tempo with the “歌曲速度 BPM” field or HTTP `jsonTempo` (20–400).
 
 Raw songs currently support 4/4 and default to C4 (MIDI 60), without applying device `tone/leadNote` offsets. Use “原始谱八度” / HTTP `jsonMiddleC` to select C3 (48), C4 (60) or C5 (72); timeline MIDI pitches are unchanged. Tracks, lyrics, chords, sections and tied note durations are preserved. Tuning and string/fret assignments are validated before GP serialization; unsupported ranges fail explicitly instead of silently transposing or dropping notes. Existing track selection and lyric merging remain available on both platforms.
 

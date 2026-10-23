@@ -17,7 +17,7 @@ bun tauri build         # 静态资源 + Rust 打包，产物在 src-tauri/targe
 ## 结构
 
 - `lib/convert.ts` — 转换核心与路由
-- `lib/song-json.ts` — LiberLive / 二维 GP 时间线 JSON → MusicXML 输入适配
+- `lib/song-json.ts` — LL / 二维 GP 时间线 JSON → MusicXML 输入适配
 - `lib/gp5-writer.ts` — GP5 v5.00 二进制写出器 + 弦品指派算法
 - `lib/gp-to-musicxml.ts` — alphaTab 乐谱模型 → MusicXML 序列化器（保留 TAB/弦品）
 - `server/convert.ts` — multipart 上传，校验后返回文件流
@@ -35,7 +35,7 @@ bun tauri build         # 静态资源 + Rust 打包，产物在 src-tauri/targe
 - **gp 系输入（gp/gpx/gp3/gp4/gp5；alphaTab JSON 和 alphaTex 先转成 `.gp` 再走这条）→ MusicXML 系 / gp / gp5 / json / atex**：alphaTab 直接解析原文件，不经过 MuseScore。MusicXML 由 `gp-to-musicxml.ts` 自研序列化——因为 MuseScore 的 MusicXML 导出会丢掉 TAB 谱表、调弦和全部弦/品信息。写 MusicXML 时**用实际发声音高、不写 `<transpose>` 八度声明**：MuseScore 4 导入时忽略该声明，按吉他记谱惯例写高八度会导致品位整体上移 12 品（曾实测踩坑）。
 - **其余转换**：MuseScore 4 CLI 负责解析和导出（mid/pdf/png/mscz 及非 gp 输入）。非 gp 输入转 `.gp` / `.gp5` / `.atex` 走两段：MuseScore 先转 MusicXML，`.gp` 由 alphaTab 的 `Gp7Exporter` 写出，`.gp5` 由自研写出器写出，`.atex` 由 alphaTab 的 `AlphaTexExporter` 写出。
 
-歌曲 JSON（LiberLive 原始详情与二维 GP 时间线）先由 `songJsonToXml` 生成 MusicXML，再直接交 alphaTab 解析，首次 GP 序列化前必须补齐调弦与弦品，并校验音高未改变、音符未丢失。`jsonTempo` 在两种歌曲 JSON 上覆盖 BPM；`jsonMiddleC` 仅影响原始详情，二维时间线已有 MIDI 音高不可再次移调。Web 和桌面 Worker 的 `.gp.json` 输入命名均应剥掉双后缀。修改此路径时，运行 `scripts/verify-song-gp.ts` 回读检查音高、起止 tick、歌词、和弦与调弦。
+歌曲 JSON（LL 原始详情与二维 GP 时间线）先由 `songJsonToXml` 生成 MusicXML，再直接交 alphaTab 解析，首次 GP 序列化前必须补齐调弦与弦品，并校验音高未改变、音符未丢失。`jsonTempo` 在两种歌曲 JSON 上覆盖 BPM；`jsonMiddleC` 仅影响原始详情，二维时间线已有 MIDI 音高不可再次移调。Web 和桌面 Worker 的 `.gp.json` 输入命名均应剥掉双后缀。修改此路径时，运行 `scripts/verify-song-gp.ts` 回读检查音高、起止 tick、歌词、和弦与调弦。
 
 导出配置见 `ConvertOptions`（lib/formats.ts）：png 的 DPI/裁边走 `-r`/`-T`，pdf 的纸张/缩放走 `-S` 临时样式文件，mid 展开反复走 `--unroll-repeats`，MusicXML/pdf/png 目标的谱表类型（TAB/五线谱）由自研序列化器处理：gp 输入直接解析；非 gp 输入选 TAB 时先由 MuseScore 桥接成 MusicXML、`ensureFingerings` 指派弦品后重新序列化；pdf/png 最后交回 MuseScore 渲染。这些是 MuseScore CLI 仅有的相关开关，别的"配置项"CLI 不支持，gp/gp5/mscz 转换本身无参数。
 

@@ -55,7 +55,7 @@ Web 38 组、Rust 39 组真实文件回归，覆盖全部 12 个输出目标、�
 - `bun run build`、Web 40 组、Rust 41 组真实文件回归、`bun tauri build --bundles app,dmg` 通过。新增固定双轨 JSON 样本验证标题/作者、自动及覆盖 BPM、原始谱八度、时间线不移调、跨小节连音、重叠长音、歌词、和弦、段落、调弦弦品，以及选轨导出 GP5/MusicXML/PDF。
 - 非法八度与九音同时发声时明确报错；不允许静默移调或丢音。保留旧 alphaTab JSON 导入，并为无效 JSON 保持可读的错误提示。
 - Web 窗口实际上传 GP 时间线，下载 `song-timeline.gp`，回读确认 89 BPM、两轨、两小节。
-- 桌面实际上传 LiberLive 原始 JSON，设置 103 BPM 与 C5，下载 `lyrics-song.gp`，回读确认速度 103、第一音 MIDI 72、两轨。
+- 桌面实际上传 LL 原始 JSON，设置 103 BPM 与 C5，下载 `lyrics-song.gp`，回读确认速度 103、第一音 MIDI 72、两轨。
 - 最新 arm64 DMG：2,524,124 字节（2.524 MB）；App 文件合计 4,880,757 字节。
 
 未在本机找到《普通朋友》原始详情/时间线，未重复 main 记录的 957 音符全曲校验；本次使用固定双轨样本。未进行 Guitar Pro 桌面端人工试听或 Windows 实机验证。

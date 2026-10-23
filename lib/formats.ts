@@ -16,7 +16,7 @@ export interface ConvertResult {
 export interface ConvertOptions {
   /** 歌曲 JSON 的速度覆盖；二维 GP JSON 缺省为 120 BPM。 */
   jsonTempo?: number;
-  /** 仅 LiberLive 原始 JSON 使用，默认 C4=60，保持源调高。 */
+  /** 仅 LL 原始 JSON 使用，默认 C4=60，保持源调高。 */
   jsonMiddleC?: number;
   /** png / png-long：导出分辨率 DPI（png 默认 360，png-long 默认 150） */
   dpi?: number;

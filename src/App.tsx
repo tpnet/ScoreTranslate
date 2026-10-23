@@ -155,7 +155,7 @@ export default function Home() {
           <CardTitle>乐谱格式转换</CardTitle>
           <CardDescription>
             支持 MIDI、Guitar Pro（gp / gpx / gp3-5）、MusicXML（mxl / musicxml /
-            xml）、alphaTab / LiberLive / GP 时间线 JSON、alphaTex 互转，并可导出 PDF 与图片。
+            xml）、alphaTab / LL / GP 时间线 JSON、alphaTex 互转，并可导出 PDF 与图片。
           </CardDescription>
         </CardHeader>
 
@@ -251,7 +251,7 @@ export default function Home() {
                       </SelectContent>
                     </Select>
                   </Row>
-                  <p className="text-xs text-muted-foreground">八度仅用于 LiberLive 原始谱；GP 时间线保留已有 MIDI 音高。原始谱暂支持 4/4，不叠加设备调性偏移。</p>
+                  <p className="text-xs text-muted-foreground">八度仅用于 LL 原始谱；GP 时间线保留已有 MIDI 音高。原始谱暂支持 4/4，不叠加设备调性偏移。</p>
                 </>
               )}
 

@@ -1,4 +1,4 @@
-/** LiberLive 原始谱及二维 GP 时间线的输入适配。统一成 480 PPQ 后桥接 MusicXML。 */
+/** LL 原始谱及二维 GP 时间线的输入适配。统一成 480 PPQ 后桥接 MusicXML。 */
 type Obj = Record<string, unknown>;
 type Note = { start: number; end: number; pitch: number; words?: string; velocity?: number };
 type Track = { name: string; notes: Note[] };
@@ -35,7 +35,7 @@ export function songJsonToXml(value: unknown, options: SongJsonOptions = {}, tit
     tracks.get(key)!.notes.push(note);
   };
   if (raw) {
-    if (raw.beat !== '4/4') throw new Error('LiberLive JSON 目前仅支持 4/4 拍');
+    if (raw.beat !== '4/4') throw new Error('LL JSON 目前仅支持 4/4 拍');
     title = typeof raw.title === 'string' ? raw.title : title;
     artist = typeof raw.originalSinger === 'string' ? raw.originalSinger : '';
     tempo = options.jsonTempo ?? num(raw.tempo);
@@ -47,7 +47,7 @@ export function songJsonToXml(value: unknown, options: SongJsonOptions = {}, tit
     for (const [pi, p] of array(raw.lyrics).entries()) {
       for (const [bi, b] of array(object(p).bars).entries()) {
         const bar = object(b);
-        if (num(bar.bar) !== bi) throw new Error('LiberLive 段内小节编号不连续');
+        if (num(bar.bar) !== bi) throw new Error('LL 段内小节编号不连续');
         for (const item of array(bar.beats)) {
           const beat = object(item), beatIndex = num(beat.beat);
           if (!Number.isInteger(beatIndex) || beatIndex < 0 || beatIndex > 3) throw new Error('拍位置超出 4/4 小节');
@@ -66,7 +66,7 @@ export function songJsonToXml(value: unknown, options: SongJsonOptions = {}, tit
             for (const n of array(g.notes)) {
               const note = object(n), pitchClass = num(note.note), octave = num(note.upOctave);
               if (!Number.isInteger(pitchClass) || pitchClass < 1 || pitchClass > 12 || !Number.isInteger(octave) || note.stretch)
-                throw new Error('不支持的 LiberLive 音符编码或 stretch 音符');
+                throw new Error('不支持的 LL 音符编码或 stretch 音符');
               const start = ticks(note.start, 120);
               add(String(index), index === 0 ? 'VOCAL' : names.get(index) ?? `LEAD ${index}`, {
                 start: base + start, end: base + ticks(num(note.start) + num(note.length), 120),
