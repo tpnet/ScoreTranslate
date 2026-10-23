@@ -7,7 +7,12 @@ edition = "2021"
 tauri-build = { version = "2.6.3", features = [] }
 
 [dependencies]
+png = "0.17"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
 tauri = { version = "2.11.6", features = [] }
+tempfile = "3.27.0"
+zip = { version = "2", default-features = false }
 
 # 缩小外壳二进制体积。strip 必须显式关掉（release 默认会剥 debuginfo）：Rust 工具链
 # 剥离后的 Mach-O 字符串表只按 4 字节对齐，macOS 27 的 dyld 会以
