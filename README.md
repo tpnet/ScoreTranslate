@@ -1,137 +1,206 @@
 # ScoreTranslate
 
-简体中文 | [English](README.en.md) · [官网](https://tpnet.github.io/ScoreTranslate/)
+简体中文 | [English](README.en.md) · [官网](https://tpnet.github.io/ScoreTranslate/) · [下载桌面版](https://github.com/tpnet/ScoreTranslate/releases)
 
-乐谱格式转换工具，使用 React + Vite，支持 Web 和 Tauri 桌面端。桌面版在本机完成转换；Web 版通过配套服务器转换，本机部署时文件不会上传到外部服务。
+乐谱格式转换工具，支持 Guitar Pro、MusicXML、MIDI、歌曲 JSON 等格式互转，以及 PDF、PNG 导出。
 
-## 转换矩阵
+桌面版在本机完成转换；Web 版由配套服务器处理文件，本机部署时文件不会上传到外部服务。前端使用 React + Vite，Web 服务使用 Bun，桌面版使用 Tauri；两端共用 TypeScript 转换核心，无数据库。
 
-| 输入 | 输出 |
+[支持的格式](#支持的格式) · [快速开始](#快速开始) · [歌曲 JSON 转 Guitar Pro](#歌曲-json-转-guitar-pro) · [HTTP 接口](#http-接口) · [开发与验证](#开发与验证) · [已知限制](#已知限制)
+
+## 支持的格式
+
+| 类型 | 输入 | 输出 |
+| --- | --- | --- |
+| Guitar Pro | `.gp` `.gpx` `.gp3` `.gp4` `.gp5` | `.gp`（GP7/8） `.gp5`（GP5 v5.00） |
+| MusicXML | `.musicxml` `.xml` `.mxl` | `.musicxml` `.xml` `.mxl` |
+| MIDI | `.mid` `.midi` | `.mid` |
+| JSON | LL 原始歌曲详情、二维 GP 时间线、alphaTab 乐谱模型 | alphaTab 乐谱模型 `.json` |
+| alphaTex | `.atex` | `.atex` |
+| MuseScore / 文档 / 图片 | — | `.mscz` `.pdf` `.png`、PNG 长图 |
+
+单文件上限 **50 MB**。`.json` 输出统一为 [alphaTab](https://alphatab.net) 乐谱模型，不会写回 LL 或二维时间线结构；[alphaTex](https://alphatab.net/docs/alphatex/syntax) 是可手写的文本谱格式，语法错误会提示行列。
+
+可按需选择音轨，并配置以下导出选项：
+
+| 目标 | 选项 |
 | --- | --- |
-| `.mid` `.midi` `.gp` `.gpx` `.gp3` `.gp4` `.gp5` `.mxl` `.musicxml` `.xml` `.json` `.atex` | `.mid` `.musicxml` `.xml` `.mxl` `.gp` `.gp5` `.json` `.atex` `.mscz` `.pdf` `.png` `.png` 长图 |
+| 全部格式 | 只导出选中的音轨 |
+| MusicXML / PDF / PNG | 六线谱或五线谱 |
+| PDF | 纸张大小、谱面缩放；谱表类型也可跟随原谱 |
+| PNG / PNG 长图 | DPI、裁边；谱表类型也可跟随原谱 |
+| MIDI | 展开反复记号 |
+| GP / GP5 / MusicXML / PDF / PNG | 歌词并轨，将人声轨歌词按时间对齐到其他音轨 |
 
-单文件上限 50MB。PNG 按页导出，多页时自动打包成 zip；「PNG 长图」把所有页纵向拼成单张图。`.json` 支持 LL 原始歌曲详情（`lyrics-*.json`）、二维 GP 时间线（`*.gp.json`）及 [alphaTab](https://alphatab.net) 的乐谱模型序列化格式，便于在网页端直接渲染或做二次处理；`.atex` 是 alphaTab 的文本谱格式 [alphaTex](https://alphatab.net/docs/alphatex/syntax)，可以直接手写，语法有误时会提示出错的行列。
+PNG 单页返回图片，多页自动打包为 ZIP；PNG 长图将各页纵向拼接，超过 **1 亿像素**时会报错，可降低 DPI 后重试。
 
-部分目标格式带导出选项：PNG 的 DPI 与裁边、PDF 的纸张与缩放、MIDI 的展开反复、MusicXML/PDF/PNG 的谱表类型（六线谱 / 五线谱）、弹唱谱的歌词并轨。多轨谱还可以只导出选中的音轨，对全部目标格式生效。
+## 快速开始
 
-PDF 选择「跟随原谱」时，如果 MuseScore 未能直接导入 Guitar Pro 文件并生成 PDF，会改经 MusicXML 重试，保留原谱的五线谱 / 六线谱显示设置。自动识别草稿中的错误时值仍需对照原谱校正。
+### 桌面版
 
-## 环境准备
+从 [Releases](https://github.com/tpnet/ScoreTranslate/releases) 下载对应平台的文件：
 
-需要 [bun](https://bun.sh) 和 [MuseScore 4](https://musescore.org)（转换引擎，需本机安装）。
+| 平台 | 安装包 / 运行要求 |
+| --- | --- |
+| macOS Apple Silicon / Intel | 对应架构的 DMG，macOS 13 及以上 |
+| Windows x64 | `ScoreTranslate_<版本>_x64-setup.exe` 安装版，或 `ScoreTranslate_<版本>_x64-portable.exe` 免安装版；免安装版需系统已有 WebView2 Runtime |
 
-MuseScore 默认读取官方安装包的位置：macOS 为 `/Applications/MuseScore 4.app/Contents/MacOS/mscore`，Windows 为 `C:\Program Files\MuseScore 4\bin\MuseScore4.exe`。装在别处时用环境变量覆盖：
+桌面版无需安装 Bun 或 Node.js，也不启动本地 HTTP 服务。**MuseScore 4 需单独安装**；未安装时，Guitar Pro / JSON / alphaTex 之间互转及导出 MusicXML 仍可用，其余转换需要 MuseScore。
+
+应用未做正式开发者签名与公证。首次打开如被系统拦截：
+
+- macOS：在「系统设置 → 隐私与安全性」选择「仍要打开」。
+- Windows：在 SmartScreen 提示中选择「更多信息 → 仍要运行」。
+
+### 本地运行 Web 版
+
+安装 [Bun](https://bun.sh) 和 [MuseScore 4](https://musescore.org)，在项目目录执行：
 
 ```bash
-export MSCORE_PATH=/your/path/to/mscore
+bun install
+bun run dev
 ```
 
-## 运行
+打开 [http://localhost:3000](http://localhost:3000)。开发模式由 Vite 提供页面，`/api` 代理到本机 `3001` 端口的 Bun API。
 
-```bash
-bun install && bun run dev
-```
-
-打开 http://localhost:3000 。开发模式由 Vite 提供页面，`/api` 代理到本机 3001 端口的 Bun API。
-
-生产部署：
+### 生产部署
 
 ```bash
 bun run build
 bun run start
 ```
 
-Bun 同时提供 `dist/` 静态页面和转换 API，默认只监听 `127.0.0.1:3000`。远程部署可配置 `HOSTNAME` / `PORT`，并在前面设置 HTTPS 反向代理。MuseScore 安装在服务器上，用户浏览器无需安装。仅部署 `dist/` 静态文件不能提供完整转换能力。
+Bun 同时提供 `dist/` 静态页面和转换 API，默认监听 `127.0.0.1:3000`。远程部署时显式设置 `HOSTNAME` / `PORT`，并配置 HTTPS 反向代理。MuseScore 安装在服务器上，用户浏览器无需安装；仅部署 `dist/` 静态文件不能提供完整转换能力。
 
-## 桌面版
+### MuseScore 路径配置
 
-桌面版直接加载静态页面，通过 Tauri IPC 调用 Rust，安装包不包含 Bun、Node.js 或 Next.js，也不启动本地 HTTP 服务。macOS arm64 DMG 约 2.5MB，安装后的 App 约 4.9MB，无需安装 Bun。
+Web 和桌面版共用以下默认查找位置：
 
-**MuseScore 4 仍需单独安装**。没有 MuseScore 时，Guitar Pro / JSON / alphaTex 之间及转 MusicXML 仍可用。乐谱解析和写出在 Worker 执行，Rust 负责 MuseScore 与文件操作，PNG 长图逐页解码并保留 1 亿像素保护。
+| 系统 | 默认路径 |
+| --- | --- |
+| macOS | `/Applications/MuseScore 4.app/Contents/MacOS/mscore` |
+| Windows | `%ProgramFiles%\MuseScore 4\bin\MuseScore4.exe` |
+| 其他系统 | 在 `PATH` 中查找 `mscore` |
 
-构建需要 [Rust](https://rustup.rs) 工具链，只能构建本机平台的包：
-
-```bash
-bun install && bun tauri build
-```
-
-产物在 `src-tauri/target/release/bundle/`（macOS 为 `dmg/`，Windows 为 `nsis/`）。macOS 要求 13 及以上。
-
-GitHub Actions 的 `desktop` 工作流支持手动构建，也会在发布 Release 时自动构建三平台安装包并上传到该 Release。Windows 同时提供安装版 `ScoreTranslate_<版本>_x64-setup.exe` 和免安装版 `ScoreTranslate_<版本>_x64-portable.exe`，无需再从安装包中提取主程序。手动构建只保存 Actions 产物，不修改 Release。发布前需同步更新项目版本号，Release 标签使用对应的 `v<版本>`。免安装版需要系统已有 WebView2 Runtime，MuseScore 4 仍需另装。
-
-应用没有正式签名，首次打开会被系统拦截：macOS 到「系统设置 → 隐私与安全性」点「仍要打开」（或执行 `xattr -dr com.apple.quarantine /Applications/ScoreTranslate.app`）；Windows 在 SmartScreen 提示里点「更多信息 → 仍要运行」。
-
-## 校验
+安装在其他位置时，在启动服务或应用的环境中设置 `MSCORE_PATH`，指向 MuseScore 4 可执行文件。例如在 macOS / Linux 终端中：
 
 ```bash
-bun run build            # TypeScript + Vite
-bun run verify           # Web HTTP 真实文件转换（需要 MuseScore 4）
-bun run verify --native  # 同一组用例验证 Rust 转换路径，自动构建原生校验入口
-bun tauri dev            # 桌面开发窗口
+export MSCORE_PATH="/your/path/to/mscore"
 ```
 
-校验覆盖全部输出格式、选轨、TAB、JSON/alphaTex、MIDI/MusicXML 桥接、多页 PNG 与长图、GP5 双解析器回读及错误输入；不使用 mock 转换引擎。
+## 歌曲 JSON 转 Guitar Pro
+
+上传歌曲 JSON，目标选择 **Guitar Pro (.gp)**，即可生成 GP7/8 文件。支持两种歌曲输入：
+
+| 输入 | 元数据与速度 | 音高设置 |
+| --- | --- | --- |
+| LL 原始歌曲详情 `lyrics-*.json` | 自动读取标题、作者与 BPM；目前仅支持 4/4 拍 | 默认 `note=1, upOctave=0` 对应 C4（MIDI 60），不叠加 `tone/leadNote` |
+| 二维 GP 时间线 `*.gp.json` | 不含速度元数据，默认 120 BPM；请填写原曲速度 | 已包含 MIDI 音高，不再应用八度设置 |
+
+仅含文件索引的 `song.json` 不受支持。在界面「歌曲速度 BPM」或 HTTP 字段 `jsonTempo` 中可覆盖两种输入的速度（20–400 BPM）。如果原始详情试听相差八度，可在「原始谱八度」选择 C3 / C4 / C5，对应 HTTP `jsonMiddleC=48/60/72`。
+
+转换保留独立音轨、歌词、和弦与段落，跨小节及重叠长音用连音线保留时长；可继续使用选轨和歌词并轨。导出前会补齐调弦、弦号与品位，若无法容纳全部音符或必须改变音高，转换会报错。
+
+设备音色、自动伴奏与扩展控制事件不转换，各旋律轨先使用钢琴音色。力度折合 GP 支持的记谱档位，歌词首尾空白由导入器规范化。跨软件播放差异见[已知限制](#已知限制)。
 
 ## HTTP 接口
 
-界面之外也可以直接调接口，`POST /api/convert` 接收 multipart 表单，字段为 `file` 和 `target`：
+以下接口由 Web 版提供，先启动开发或生产服务。
+
+### 转换文件
+
+`POST /api/convert` 接收 multipart 表单，必填字段为 `file` 和 `target`：
 
 ```bash
-curl -O -J -F "file=@score.gp5" -F "target=pdf" http://localhost:3000/api/convert
+curl -f -O -J \
+  -F "file=@score.gp5" \
+  -F "target=pdf" \
+  http://localhost:3000/api/convert
 ```
 
-成功返回文件流，文件名在 `Content-Disposition` 与 `X-Filename` 响应头里；失败返回 JSON `{"error": "..."}`。
+`target` 可选值：`mid`、`musicxml`、`xml`、`mxl`、`gp`、`gp5`、`json`、`atex`、`mscz`、`pdf`、`png`、`png-long`。
 
-导出选项作为可选表单字段传入，非法值直接忽略：`dpi`（50–1200）、`trim`（0–500 像素边距）、`scale`（50–200）、`paper`（`a4` / `letter`）、`staffMode`（`tab` / `standard`）、`unrollRepeats`（`1`）、`mergeLyrics`（`1`，把人声轨歌词按时间对齐并入其他音轨）、`tracks`（逗号分隔的音轨下标，只导出这些轨，缺省导出全部）。
+成功返回文件流，文件名见 `Content-Disposition`，也可对 `X-Filename` 响应头进行 URL 解码获取；PNG 多页时实际返回 `.zip`。失败返回非 2xx 状态和 JSON `{"error":"..."}`。
 
-`tracks` 的下标由 `POST /api/tracks` 给出，同样接收 `file` 字段，返回 `{"tracks": ["音轨名", ...]}`，数组顺序即下标：
+可选表单字段如下；只对适用的输入或目标生效：
+
+| 字段 | 取值 | 用途 |
+| --- | --- | --- |
+| `tracks` | 从 0 开始的音轨下标，逗号分隔，如 `0,2` | 全部目标；缺省导出全部，下标由 `/api/tracks` 获取 |
+| `dpi` | 50–1200 | PNG 分辨率；普通 PNG 默认 360，长图默认 150 |
+| `trim` | 0–500 | PNG 裁边后保留的像素边距 |
+| `paper` | `a4` / `letter` | PDF 纸张大小；缺省沿用原谱 |
+| `scale` | 50–200 | PDF 谱面缩放百分比；100 为原始大小 |
+| `staffMode` | `tab` / `standard` | MusicXML / PDF / PNG 的六线谱或五线谱；PDF / PNG 缺省跟随原谱，Guitar Pro 系输入转 MusicXML 缺省为六线谱 |
+| `unrollRepeats` | `1` | MIDI 展开反复 |
+| `mergeLyrics` | `1` | GP / GP5 / MusicXML / PDF / PNG 歌词并轨 |
+| `jsonTempo` | 20–400 | 覆盖歌曲 JSON 的 BPM |
+| `jsonMiddleC` | 0–120 中的 C 音 MIDI 值（12 的倍数） | LL 原始详情的八度基准，默认 60；常用 48 / 60 / 72，二维时间线不受影响 |
+
+数值字段会四舍五入并限制在上述范围内；空值或无法解析的数值、无效枚举值会忽略。`jsonMiddleC` 经范围处理后若不是 C 音，LL 导入会报错。
+
+### 读取音轨
+
+`POST /api/tracks` 接收 `file` 字段，返回 `{"tracks":["音轨名", "..."]}`，数组顺序对应 `tracks` 的下标：
 
 ```bash
-curl -F "file=@score.gp5" http://localhost:3000/api/tracks
+curl -f -F "file=@score.gp5" http://localhost:3000/api/tracks
 ```
+
+### 检查转换引擎
+
+`GET /api/status` 返回 `{"path":"MuseScore 可执行文件路径","major":4}`；未检测到版本时 `major` 为 `null`。
+
+## 开发与验证
+
+### 常用命令
+
+```bash
+bun run build            # TypeScript 检查 + Vite 静态构建
+bun run verify           # Web HTTP 真实文件回归，需要 MuseScore 4
+bun run verify --native  # 同一组用例验证 Rust 路径，自动构建原生校验入口
+bun tauri dev            # 桌面开发窗口，需要 Rust 工具链
+bun tauri build          # 构建当前平台桌面包，需要 Rust 工具链
+```
+
+桌面构建需安装 [Rust](https://rustup.rs) 及对应平台的 Tauri 构建依赖，先执行 `bun install`。产物位于 `src-tauri/target/release/bundle/`，macOS DMG 在 `dmg/`，Windows 安装包在 `nsis/`。
+
+`desktop` GitHub Actions 工作流支持手动构建 macOS Apple Silicon、macOS Intel 和 Windows x64 产物；发布 Release 时自动构建并上传安装包及 Windows 免安装版。手动运行只保存 Actions 产物。发布前同步更新项目版本号，Release 标签使用对应的 `v<版本>`。
+
+回归覆盖全部输出格式、选轨、TAB、歌曲 JSON / alphaTab JSON / alphaTex、MIDI / MusicXML 桥接、多页 PNG 与长图、GP5 双解析器回读及错误输入，使用真实文件与 MuseScore，无 mock 转换引擎。
+
+二维 GP 时间线转 GP 后，还可运行专项回读，比较音高、起止 tick、歌词、和弦及调弦弦品；检查完整音轨时不要启用选轨或歌词并轨：
+
+```bash
+bun scripts/verify-song-gp.ts /path/to/source.gp.json /path/to/output.gp
+```
+
+### 项目结构
+
+| 路径 | 职责 |
+| --- | --- |
+| `lib/convert.ts` | 共用转换核心、路由与音轨过滤 |
+| `lib/song-json.ts` | LL / 二维 GP 时间线 JSON 输入适配 |
+| `lib/gp5-writer.ts` | GP5 二进制写出、调弦与弦品指派 |
+| `lib/gp-to-musicxml.ts` | 保留 TAB 谱表与弦品信息的 MusicXML 序列化器 |
+| `lib/formats.ts` / `lib/request.ts` | 格式定义、导出参数与上传校验 |
+| `src/App.tsx` | 上传、格式与选项选择、下载界面 |
+| `src/platform.ts` / `src/convert.worker.ts` | Web HTTP / 桌面 IPC 入口与桌面后台转换 |
+| `server/` | Bun HTTP 服务、转换 / 音轨接口与 MuseScore / PNG 适配 |
+| `src-tauri/` | 静态前端打包、Rust 原生命令与 MuseScore / PNG / ZIP 适配 |
+| `scripts/` | 开发启动与真实文件校验 |
+
+Guitar Pro 系输入（JSON / alphaTex 先转为 GP）通过 alphaTab 直接解析，转 MusicXML 时使用自研序列化器保留 TAB、调弦和弦品。其余转换由 MuseScore 4 解析或渲染；非 GP 输入导出 GP / GP5 / alphaTex 时先桥接为 MusicXML。
+
+PDF 选择「跟随原谱」时，若 MuseScore 无法直接从 Guitar Pro 生成 PDF，会经 MusicXML 重试，保留原谱五线谱 / 六线谱显示设置。桌面版在 Worker 中执行共用核心，Rust 负责 MuseScore 与文件操作。
 
 ## 已知限制
 
-**gp3 / gp4 / gpx 只能输入、不能输出。** 能打开 gp3/gp4 的软件都能打开 gp5，单独实现只服务于早已废弃的老版本软件；gpx 是 GP6 独有的 BCFZ 专有容器，GP6 已被官方放弃。`.gp` 输出为 Guitar Pro 7/8 格式（由 alphaTab 生成）。
-
-**`.gp5` 输出为自研写出器生成**（开源生态无现成实现），保留音符、节奏、连音线、连音、力度、拍号调号、反复记号、调弦变调夹，以及演奏效果（推弦、击勾弦、滑音、泛音、闷音、延音、颤音、倚音、扫弦、断奏、重音、指法等；GP5 格式没有的除外，如左手点弦与拨片刮弦）。和弦图不保留。来源不是吉他谱时（MIDI / 钢琴 MusicXML），会按音域自动选择六弦吉他 / 七弦 / 贝斯调音并指派弦位品格，超出音域的音符按八度折叠；非 ASCII 的标题、歌词等文本会降级为 `?`（GP5 格式的编码限制），中文歌词请改用 MusicXML / pdf / png 等目标格式。
-
-**MIDI 转记谱格式的质量有天花板。** MIDI 不携带谱面信息（声部划分、连音线、临时记号的拼写），转换结果由 MuseScore 的量化算法推断，演奏录制的 MIDI 转出的谱子通常需要手工整理。这是格式本身的固有限制。
-
-## 结构
-
-- `lib/convert.ts` — 转换核心与路由；Guitar Pro 输入直接解析，其余先经 MusicXML 桥接
-- `lib/gp5-writer.ts` — GP5 二进制写出器（含弦品指派算法）
-- `lib/gp-to-musicxml.ts` — Guitar Pro 模型 → MusicXML 序列化器（保留 TAB 谱表与弦品信息）
-- `server/convert.ts` — 转换接口，负责校验与文件流响应
-- `server/tracks.ts` — 音轨名列表接口，供前端勾选导出哪些轨
-- `src/App.tsx` — 上传 / 选择目标格式 / 下载的单页界面
-- `src/convert.worker.ts` — 桌面端后台转换，共用 `lib/convert.ts`
-- `src/platform.ts` — Web HTTP / 桌面 IPC 调用入口
-- `server/render.ts` — Web 端 MuseScore 与 PNG 适配
-- `src-tauri/src/render.rs` — 桌面端 MuseScore、临时文件、PNG/ZIP 实现
-- `src-tauri/` — Tauri 静态前端与原生命令，不包含服务端运行时
+- **旧格式只读**：`.gp3` / `.gp4` / `.gpx` 仅支持输入；`.gp` 输出为 GP7/8，`.gp5` 输出为 GP5 v5.00。
+- **GP5 有格式与编码限制**：自研写出器保留音符、节奏、连音线、连音、力度、拍号调号、反复、调弦、变调夹及推弦、击勾弦、滑音、泛音、闷音、颤音等演奏效果；不保留和弦图，GP5 无法表达的效果会降级或跳过。非 ASCII 标题、歌词等文本降级为 `?`，中文歌词建议导出 MusicXML / PDF / PNG。MIDI 或钢琴 MusicXML 转 GP5 时会自动选择调弦并指派弦品，超出音域的音符可能按八度折叠；歌曲 JSON 路径会在音高改变时直接报错。
+- **MIDI 与识别谱需要人工校正**：MIDI 不携带声部、连音线、临时记号拼写等谱面信息，MuseScore 需通过量化推断；演奏录制的 MIDI、自动识别草稿中的时值与记谱仍需对照原谱整理。
+- **歌曲 JSON 的跨软件播放仍需确认**：历史样本《普通朋友》的 alphaTab 回读保留了全部 957 个音符的音高与起止时间，但 MuseScore 4 回读时会将结尾一处连音长音拆成两次起音。Guitar Pro 桌面端的实际发声与连音效果尚未人工试听确认。
 
 ## 许可证
 
 [MIT](LICENSE)
-
-## LL / GP 时间线 JSON 转 GP
-
-上传原始 `lyrics-*.json` 或此前生成的二维 `.gp.json`，目标选择 **Guitar Pro (.gp)** 即可。不要上传仅含文件索引的 `song.json`。原始歌曲详情自动读取标题、作者与 BPM；二维时间线没有速度元数据，在「歌曲速度 BPM」填写原曲速度（《普通朋友》为 **89**；留空默认 120）。也可在 HTTP 表单传入 `jsonTempo=89`。
-
-原始谱目前支持 4/4，默认 `note=1, upOctave=0` 对应 C4（MIDI 60），不叠加 `tone/leadNote`。若试听确认相差八度，可在「原始谱八度」选择 C3/C5（HTTP `jsonMiddleC=48/72`）。二维时间线已经有 MIDI 音高，不再应用这个设置。设备音色、自动伴奏与扩展控制事件不转换；各旋律轨先用钢琴音色。力度折合 GP 支持的记谱档位，歌词首尾空白由导入器规范化。
-
-转换保留独立音轨、歌词、和弦及段落，跨小节与重叠长音用连音线保留时长。只导出选中音轨和现有歌词并轨功能继续适用。`.gp` 为 GP7/8 文件，不是 JSON 改扩展名。
-
-维护验证：按本项目约定用真实文件请求接口，并回读生成的 GP 比较所有音符（合并连音线后）：
-
-```sh
-bun scripts/verify-song-gp.ts /path/to/source.gp.json /path/to/output.gp
-```
-
-《普通朋友》两种输入均已核对：86 小节、5 音轨、957 个音符的音高与起止 tick 一致，BPM 89；歌词内容一致（忽略首尾空白）。音高基准仍以试听确认为准。
-
-独立 MuseScore 4 回读能打开全部 5 轨和 86 小节；其 GP 导入器会把结尾 LEAD 3 的一个 G3 长音（480 PPQ 下 161400–165120）拆成 161400–161520 与 161520–165120 两次起音。alphaTab 回读同一 GP 时该连音线完整。此项跨软件兼容性差异尚未在 Guitar Pro 桌面端试听确认。
-
-歌曲 JSON 导出 GP 前会补齐标准调弦及弦号、品位，避免 Guitar Pro 将缺失调弦显示成六根 C-1。若弦品分配需要移调或无法容纳全部音符，转换会报错，不静默折叠音高。回读脚本同时校验调弦、弦品与 MIDI 音高一致；《普通朋友》修复版全部 957 音符通过，MuseScore 可渲染非静音 WAV。Guitar Pro 桌面端实际发声仍需试听确认。

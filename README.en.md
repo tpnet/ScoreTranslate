@@ -1,131 +1,206 @@
 # ScoreTranslate
 
-[简体中文](README.md) | English · [Website](https://tpnet.github.io/ScoreTranslate/)
+[简体中文](README.md) | English · [Website](https://tpnet.github.io/ScoreTranslate/) · [Download desktop app](https://github.com/tpnet/ScoreTranslate/releases)
 
-A React + Vite sheet-music converter for the web and Tauri desktop. Desktop conversion runs locally; the web version uses its companion server. Running that server locally keeps files on your machine.
+A sheet-music converter for Guitar Pro, MusicXML, MIDI, song JSON and more, with PDF and PNG export.
 
-## Conversion matrix
+Desktop conversion runs locally. The web version processes files on its companion server; running that server locally keeps files on your machine. React + Vite powers the frontend, Bun serves the web app, and Tauri powers the desktop app. Both share a TypeScript conversion core, with no database.
 
-| Input | Output |
+[Supported formats](#supported-formats) · [Get started](#get-started) · [Song JSON to Guitar Pro](#song-json-to-guitar-pro) · [HTTP API](#http-api) · [Development and verification](#development-and-verification) · [Known limitations](#known-limitations)
+
+## Supported formats
+
+| Type | Input | Output |
+| --- | --- | --- |
+| Guitar Pro | `.gp` `.gpx` `.gp3` `.gp4` `.gp5` | `.gp` (GP7/8) `.gp5` (GP5 v5.00) |
+| MusicXML | `.musicxml` `.xml` `.mxl` | `.musicxml` `.xml` `.mxl` |
+| MIDI | `.mid` `.midi` | `.mid` |
+| JSON | LL raw song details, two-dimensional GP timelines, alphaTab score models | alphaTab score model `.json` |
+| alphaTex | `.atex` | `.atex` |
+| MuseScore / documents / images | — | `.mscz` `.pdf` `.png`, long PNG |
+
+Maximum **50 MB** per file. `.json` output always uses the [alphaTab](https://alphatab.net) score model; it does not recreate LL or timeline structures. [alphaTex](https://alphatab.net/docs/alphatex/syntax) is a text notation format you can write by hand; syntax errors include line and column information.
+
+Select tracks and configure export options as needed:
+
+| Target | Options |
 | --- | --- |
-| `.mid` `.midi` `.gp` `.gpx` `.gp3` `.gp4` `.gp5` `.mxl` `.musicxml` `.xml` `.json` `.atex` | `.mid` `.musicxml` `.xml` `.mxl` `.gp` `.gp5` `.json` `.atex` `.mscz` `.pdf` `.png` `.png` long image |
+| All formats | Export selected tracks only |
+| MusicXML / PDF / PNG | Tablature or standard notation |
+| PDF | Paper size, score scaling, or original staff layout |
+| PNG / long PNG | DPI, margin trimming, or original staff layout |
+| MIDI | Unroll repeats |
+| GP / GP5 / MusicXML / PDF / PNG | Merge vocal lyrics onto other tracks, aligned by time |
 
-Maximum 50MB per file. PNG is exported page by page and zipped automatically when the score spans multiple pages; "PNG long image" stitches all pages vertically into a single image. `.json` is [alphaTab](https://alphatab.net)'s serialized score model, handy for rendering in the browser or further processing; `.atex` is alphaTab's text notation format, [alphaTex](https://alphatab.net/docs/alphatex/syntax), which you can write by hand — syntax errors are reported with their line and column.
+PNG returns an image for a single page and a ZIP for multiple pages. Long PNG stitches pages vertically; exports exceeding **100 million pixels** fail with an error. Lower the DPI to retry.
 
-Some targets accept export options: DPI and margin trimming for PNG, paper size and scaling for PDF, repeat unrolling for MIDI, staff type (tablature / standard notation) for MusicXML, PDF and PNG, and lyric merging for lead-sheet style scores. Multi-track scores can also be narrowed down to selected tracks, which works for every target format.
+## Get started
 
-For PDF with the original staff layout, if MuseScore cannot produce a PDF directly from Guitar Pro input, conversion retries through MusicXML, retaining the original standard notation / tablature visibility. Incorrect durations in recognition drafts still need manual correction against the source score.
+### Desktop app
 
-## Prerequisites
+Download the appropriate file from [Releases](https://github.com/tpnet/ScoreTranslate/releases):
 
-You need [bun](https://bun.sh) and [MuseScore 4](https://musescore.org) — MuseScore acts as a conversion engine and must be installed locally.
+| Platform | Package / requirements |
+| --- | --- |
+| macOS Apple Silicon / Intel | DMG for the appropriate architecture; macOS 13 or later |
+| Windows x64 | `ScoreTranslate_<version>_x64-setup.exe` installer or `ScoreTranslate_<version>_x64-portable.exe`; the portable app requires an installed WebView2 Runtime |
 
-By default the official installer locations are used: `/Applications/MuseScore 4.app/Contents/MacOS/mscore` on macOS and `C:\Program Files\MuseScore 4\bin\MuseScore4.exe` on Windows. If you installed it elsewhere, override it with an environment variable:
+The desktop app needs neither Bun nor Node.js and starts no local HTTP server. **Install MuseScore 4 separately.** Without it, conversion between Guitar Pro / JSON / alphaTex and export to MusicXML still work; other conversions require MuseScore.
+
+The app has no formal developer signing or notarization. If the OS blocks the first launch:
+
+- macOS: open System Settings → Privacy & Security and select “Open Anyway”.
+- Windows: select “More info → Run anyway” in the SmartScreen prompt.
+
+### Run the web app locally
+
+Install [Bun](https://bun.sh) and [MuseScore 4](https://musescore.org), then run these commands in the project directory:
 
 ```bash
-export MSCORE_PATH=/your/path/to/mscore
+bun install
+bun run dev
 ```
 
-## Running
+Open [http://localhost:3000](http://localhost:3000). Vite serves the development frontend and proxies `/api` to the Bun API on local port `3001`.
 
-```bash
-bun install && bun run dev
-```
-
-Then open http://localhost:3000 . Vite serves the frontend and proxies `/api` to the Bun API on port 3001.
-
-Production:
+### Production deployment
 
 ```bash
 bun run build
 bun run start
 ```
 
-Bun serves both `dist/` and the API, listening on `127.0.0.1:3000` by default. Configure `HOSTNAME` / `PORT` and an HTTPS reverse proxy for remote deployment. MuseScore must be installed on the server; browser users do not need it. Hosting only `dist/` does not provide full conversion support.
+Bun serves both `dist/` and the conversion API, listening on `127.0.0.1:3000` by default. For remote deployment, explicitly set `HOSTNAME` / `PORT` and configure an HTTPS reverse proxy. Install MuseScore on the server; browser users do not need it. Hosting only `dist/` does not provide full conversion support.
 
-## Desktop app
+### Configure the MuseScore path
 
-The desktop app loads static assets and calls Rust through Tauri IPC. It bundles no Bun, Node.js or Next.js and starts no local HTTP server. The macOS arm64 DMG is approximately 2.5MB and the installed app approximately 4.9MB; Bun is not required.
+The web and desktop apps use the same default lookup locations:
 
-**MuseScore 4 must still be installed separately.** Without it, conversion between Guitar Pro / JSON / alphaTex and export to MusicXML remain available. Score processing runs in a Worker; Rust handles MuseScore and file operations. Long PNG export decodes one page at a time and retains the 100-million-pixel limit.
+| System | Default path |
+| --- | --- |
+| macOS | `/Applications/MuseScore 4.app/Contents/MacOS/mscore` |
+| Windows | `%ProgramFiles%\MuseScore 4\bin\MuseScore4.exe` |
+| Other systems | `mscore` on `PATH` |
 
-Building requires the [Rust](https://rustup.rs) toolchain and only produces a package for the host platform:
-
-```bash
-bun install && bun tauri build
-```
-
-Output goes to `src-tauri/target/release/bundle/` (`dmg/` on macOS, `nsis/` on Windows). macOS 13 or later is required.
-
-The `desktop` GitHub Actions workflow supports manual builds and automatically builds and uploads all platform packages when a Release is published. Windows includes both `ScoreTranslate_<version>_x64-setup.exe` and `ScoreTranslate_<version>_x64-portable.exe`; extracting the main executable from the installer is no longer necessary. Manual builds only save Actions artifacts and do not modify a Release. Update the project version before publishing and use the matching `v<version>` Release tag. The portable EXE requires an installed WebView2 Runtime; MuseScore 4 remains a separate dependency.
-
-The app is not signed with a paid certificate, so the OS blocks the first launch: on macOS go to System Settings → Privacy & Security and click "Open Anyway" (or run `xattr -dr com.apple.quarantine /Applications/ScoreTranslate.app`); on Windows click "More info → Run anyway" in the SmartScreen prompt.
-
-## Verification
+If MuseScore is installed elsewhere, set `MSCORE_PATH` to its version 4 executable in the environment that starts the service or app. For example, in a macOS / Linux terminal:
 
 ```bash
-bun run build            # TypeScript + Vite
-bun run verify           # Real HTTP conversions, requires MuseScore 4
-bun run verify --native  # Same cases through Rust; builds the native verification entry
-bun tauri dev            # Desktop development window
+export MSCORE_PATH="/your/path/to/mscore"
 ```
 
-Checks cover all output formats, track selection, TAB, JSON/alphaTex, MIDI/MusicXML bridging, multipage PNG and long images, GP5 readback through two independent parsers, and invalid inputs. The conversion engine is not mocked.
+## Song JSON to Guitar Pro
+
+Upload a song JSON file and choose **Guitar Pro (.gp)** to create a GP7/8 file. Two song input formats are supported:
+
+| Input | Metadata and tempo | Pitch settings |
+| --- | --- | --- |
+| LL raw song details `lyrics-*.json` | Reads title, artist and BPM; currently supports 4/4 only | `note=1, upOctave=0` defaults to C4 (MIDI 60), without applying `tone/leadNote` offsets |
+| Two-dimensional GP timeline `*.gp.json` | No tempo metadata; defaults to 120 BPM, so enter the original tempo | Already contains MIDI pitches; octave settings do not apply |
+
+File-index-only `song.json` files are unsupported. Override either input's tempo using the “歌曲速度 BPM” field or HTTP `jsonTempo` (20–400 BPM). If a raw song sounds an octave off, use “原始谱八度” to select C3 / C4 / C5, corresponding to HTTP `jsonMiddleC=48/60/72`.
+
+Conversion preserves separate tracks, lyrics, chords and sections, using ties to retain overlapping notes and notes spanning barlines. Track selection and lyric merging remain available. Tuning, string and fret data are assigned before export; conversion fails if it cannot fit all notes or would have to change their pitches.
+
+Device sounds, automatic accompaniment and extended control events are not converted; melody tracks initially use piano sounds. Velocities map to GP's supported dynamic levels, and the importer normalizes leading and trailing lyric whitespace. See [known limitations](#known-limitations) for playback differences between applications.
 
 ## HTTP API
 
-Besides the UI you can call the endpoint directly. `POST /api/convert` takes a multipart form with the fields `file` and `target`:
+These endpoints are provided by the web app. Start the development or production server first.
+
+### Convert a file
+
+`POST /api/convert` accepts a multipart form with required fields `file` and `target`:
 
 ```bash
-curl -O -J -F "file=@score.gp5" -F "target=pdf" http://localhost:3000/api/convert
+curl -f -O -J \
+  -F "file=@score.gp5" \
+  -F "target=pdf" \
+  http://localhost:3000/api/convert
 ```
 
-On success it returns a file stream, with the filename in the `Content-Disposition` and `X-Filename` response headers. On failure it returns JSON: `{"error": "..."}`.
+Supported `target` values: `mid`, `musicxml`, `xml`, `mxl`, `gp`, `gp5`, `json`, `atex`, `mscz`, `pdf`, `png`, `png-long`.
 
-Export options are passed as optional form fields; invalid values are silently ignored: `dpi` (50–1200), `trim` (0–500, margin in pixels), `scale` (50–200), `paper` (`a4` / `letter`), `staffMode` (`tab` / `standard`), `unrollRepeats` (`1`), `mergeLyrics` (`1`, copies the vocal track's lyrics onto the other tracks, time-aligned), `tracks` (comma-separated track indices; exports only those, all tracks by default).
+Success returns a file stream. Read the filename from `Content-Disposition` or URL-decode the `X-Filename` header; multipage PNG returns a `.zip`. Failure returns a non-2xx status and JSON `{"error":"..."}`.
 
-The indices for `tracks` come from `POST /api/tracks`, which takes the same `file` field and returns `{"tracks": ["Track name", ...]}` — the array order is the index:
+Optional form fields apply only to the relevant inputs or targets:
+
+| Field | Values | Purpose |
+| --- | --- | --- |
+| `tracks` | Comma-separated zero-based track indices, e.g. `0,2` | All targets; exports all tracks by default. Get indices from `/api/tracks` |
+| `dpi` | 50–1200 | PNG resolution; defaults to 360 for regular PNG and 150 for long PNG |
+| `trim` | 0–500 | Pixel margin retained after trimming PNG whitespace |
+| `paper` | `a4` / `letter` | PDF paper size; uses the source setting by default |
+| `scale` | 50–200 | PDF score scaling percentage; 100 is the original size |
+| `staffMode` | `tab` / `standard` | Tablature or standard notation for MusicXML / PDF / PNG; PDF / PNG use the original layout by default, while Guitar Pro family inputs default to tablature for MusicXML |
+| `unrollRepeats` | `1` | Unroll MIDI repeats |
+| `mergeLyrics` | `1` | Merge lyrics for GP / GP5 / MusicXML / PDF / PNG |
+| `jsonTempo` | 20–400 | Override song JSON BPM |
+| `jsonMiddleC` | MIDI C pitches from 0–120 (multiples of 12) | Octave reference for LL raw details; defaults to 60, commonly 48 / 60 / 72. Does not affect timelines |
+
+Numeric fields are rounded and clamped to the ranges above. Empty or unparseable numeric values and invalid enum values are ignored. If the resulting `jsonMiddleC` is not a C pitch, LL import fails with an error.
+
+### Read tracks
+
+`POST /api/tracks` accepts `file` and returns `{"tracks":["Track name", "..."]}`. Array positions are the indices for `tracks`:
 
 ```bash
-curl -F "file=@score.gp5" http://localhost:3000/api/tracks
+curl -f -F "file=@score.gp5" http://localhost:3000/api/tracks
 ```
+
+### Check the conversion engine
+
+`GET /api/status` returns `{"path":"MuseScore executable path","major":4}`. If no version is detected, `major` is `null`.
+
+## Development and verification
+
+### Common commands
+
+```bash
+bun run build            # TypeScript checks + Vite static build
+bun run verify           # Real web HTTP regression checks; requires MuseScore 4
+bun run verify --native  # Same cases through Rust; builds the native verification entry
+bun tauri dev            # Desktop development window; requires Rust
+bun tauri build          # Build desktop packages for the current platform; requires Rust
+```
+
+Desktop builds require [Rust](https://rustup.rs) and the platform's Tauri build dependencies. Run `bun install` first. Output goes to `src-tauri/target/release/bundle/`, with macOS DMGs in `dmg/` and Windows installers in `nsis/`.
+
+The `desktop` GitHub Actions workflow supports manual builds for macOS Apple Silicon, macOS Intel and Windows x64. Publishing a Release automatically builds and uploads installers and the Windows portable app. Manual runs only save Actions artifacts. Synchronize project version numbers before publishing and use a matching `v<version>` Release tag.
+
+Regression checks cover all output formats, track selection, TAB, song JSON / alphaTab JSON / alphaTex, MIDI / MusicXML bridging, multipage PNG and long images, GP5 readback through two independent parsers, and invalid inputs. They use real files and MuseScore, with no mocked conversion engine.
+
+After converting a two-dimensional GP timeline to GP, run the dedicated readback check to compare pitches, start/end ticks, lyrics, chords, tuning and string/fret data. Leave track selection and lyric merging disabled when checking the complete score:
+
+```bash
+bun scripts/verify-song-gp.ts /path/to/source.gp.json /path/to/output.gp
+```
+
+### Project layout
+
+| Path | Responsibility |
+| --- | --- |
+| `lib/convert.ts` | Shared conversion core, routing and track filtering |
+| `lib/song-json.ts` | LL / two-dimensional GP timeline JSON input adapter |
+| `lib/gp5-writer.ts` | GP5 binary writer, tuning and string/fret assignment |
+| `lib/gp-to-musicxml.ts` | MusicXML serializer preserving TAB staves and string/fret data |
+| `lib/formats.ts` / `lib/request.ts` | Format definitions, export options and upload validation |
+| `src/App.tsx` | Upload, format and option selection, download UI |
+| `src/platform.ts` / `src/convert.worker.ts` | Web HTTP / desktop IPC entry points and desktop background conversion |
+| `server/` | Bun HTTP server, conversion / track endpoints and MuseScore / PNG adapter |
+| `src-tauri/` | Static frontend packaging, Rust commands and MuseScore / PNG / ZIP adapter |
+| `scripts/` | Development launcher and real-file verification |
+
+Guitar Pro family inputs (JSON / alphaTex are first converted to GP) are parsed directly by alphaTab. MusicXML export uses a custom serializer to retain TAB, tunings and string/fret data. Other conversions use MuseScore 4 for parsing or rendering; non-GP inputs are bridged through MusicXML before GP / GP5 / alphaTex export.
+
+When PDF uses the original staff layout and MuseScore cannot render Guitar Pro directly, conversion retries through MusicXML, preserving standard notation / tablature visibility. On desktop, the shared core runs in a Worker, while Rust handles MuseScore and file operations.
 
 ## Known limitations
 
-**gp3 / gp4 / gpx are input-only.** Any software that opens gp3/gp4 also opens gp5, so a dedicated writer would only serve long-obsolete versions; gpx is GP6's proprietary BCFZ container and GP6 itself has been abandoned by the vendor. The `.gp` output is Guitar Pro 7/8 format, produced by alphaTab.
-
-**`.gp5` output comes from a from-scratch writer** (no existing open-source implementation was available). It preserves notes, rhythms, ties, tuplets, dynamics, time and key signatures, repeat marks, tunings and capo position, plus playing techniques (bends, hammer-ons and pull-offs, slides, harmonics, palm mutes, let ring, vibrato, grace notes, strums, staccato, accents, fingering, …) — except what the GP5 format cannot express, such as left-hand taps and pick slides. Chord diagrams are not preserved. When the source is not a guitar score (MIDI or piano MusicXML), the writer picks a 6-string guitar, 7-string or bass tuning based on the pitch range and assigns string/fret positions automatically, folding out-of-range notes by octaves. Non-ASCII text such as titles and lyrics degrades to `?` — a limitation of the GP5 format's encoding — so for non-Latin lyrics prefer MusicXML, pdf or png targets.
-
-**MIDI-to-notation conversion has a quality ceiling.** MIDI carries no engraving information (voice separation, ties, enharmonic spelling of accidentals), so the result is inferred by MuseScore's quantization. Scores converted from performance-recorded MIDI usually need manual cleanup. This is inherent to the format, not to this tool.
-
-## Layout
-
-- `lib/convert.ts` — conversion core and routing; Guitar Pro input is parsed directly, everything else goes through a MusicXML bridge
-- `lib/gp5-writer.ts` — GP5 binary writer, including the string/fret assignment algorithm
-- `lib/gp-to-musicxml.ts` — Guitar Pro model → MusicXML serializer, preserving TAB staves and string/fret data
-- `server/convert.ts` — conversion endpoint: validation and file-stream response
-- `server/tracks.ts` — track-name listing endpoint, used by the UI's track picker
-- `src/App.tsx` — single-page UI for upload, target selection and download
-- `src/convert.worker.ts` — desktop background processing using `lib/convert.ts`
-- `src/platform.ts` — web HTTP / desktop IPC entry
-- `server/render.ts` — web MuseScore and PNG adapter
-- `src-tauri/src/render.rs` — native MuseScore, temporary files, PNG/ZIP
-- `src-tauri/` — Tauri static frontend and native commands, without a server runtime
+- **Legacy formats are input-only:** `.gp3` / `.gp4` / `.gpx` cannot be exported. `.gp` output is GP7/8; `.gp5` output is GP5 v5.00.
+- **GP5 has format and encoding limits:** the custom writer preserves notes, rhythms, ties, tuplets, dynamics, time/key signatures, repeats, tuning, capo position, and techniques including bends, hammer-ons/pull-offs, slides, harmonics, palm mutes and vibrato. Chord diagrams are not retained; effects GP5 cannot express are downgraded or skipped. Non-ASCII titles, lyrics and other text become `?`; use MusicXML / PDF / PNG for Chinese lyrics. MIDI or piano MusicXML exported to GP5 receives automatic tuning and string/fret assignments; out-of-range notes may be folded by octaves. The song JSON path instead fails if pitches would change.
+- **MIDI and recognized scores need manual correction:** MIDI lacks voice, tie and accidental-spelling information, so MuseScore infers notation through quantization. Performance recordings and recognized drafts still need checking against the original score.
+- **Song JSON playback across apps still needs confirmation:** alphaTab readback of the historical “普通朋友” sample retained all 957 notes' pitches and start/end times, but MuseScore 4 split one tied note near the end into two attacks. Playback and ties have not been manually checked in the Guitar Pro desktop app.
 
 ## License
 
 [MIT](LICENSE)
-
-## LL / GP timeline JSON
-
-Upload a LL `lyrics-*.json` song detail file or a two-dimensional `*.gp.json` timeline, then select Guitar Pro (.gp). File-index-only `song.json` files are not supported. Titles, artist and tempo are read from raw songs; timelines default to 120 BPM. Override tempo with the “歌曲速度 BPM” field or HTTP `jsonTempo` (20–400).
-
-Raw songs currently support 4/4 and default to C4 (MIDI 60), without applying device `tone/leadNote` offsets. Use “原始谱八度” / HTTP `jsonMiddleC` to select C3 (48), C4 (60) or C5 (72); timeline MIDI pitches are unchanged. Tracks, lyrics, chords, sections and tied note durations are preserved. Tuning and string/fret assignments are validated before GP serialization; unsupported ranges fail explicitly instead of silently transposing or dropping notes. Existing track selection and lyric merging remain available on both platforms.
-
-`*.gp.json` downloads use the song basename, e.g. `song.gp.json` → `song.gp`. For a real timeline/GP readback comparison:
-
-```bash
-bun scripts/verify-song-gp.ts input.gp.json output.gp
-```
-
-The upstream real-song check found a MuseScore tie-import difference for one final sustained note; alphaTab readback preserved the tie. Guitar Pro desktop audio still requires manual listening confirmation.

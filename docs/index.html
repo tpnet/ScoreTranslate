@@ -1,243 +1,265 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ScoreTranslate — 本地乐谱格式转换工具</title>
-<meta name="description" content="MIDI / Guitar Pro / MusicXML / MuseScore / PDF / PNG 互转，文件全程不出本机。">
-<style>
-  :root {
-    --bg: #ffffff;
-    --fg: #0a0a0a;
-    --muted: #737373;
-    --border: #e5e5e5;
-    --card: #fafafa;
-    --code-bg: #f5f5f5;
-    --radius: 10px;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #0a0a0a;
-      --fg: #fafafa;
-      --muted: #a1a1a1;
-      --border: #262626;
-      --card: #141414;
-      --code-bg: #1c1c1c;
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Guitar Pro、MusicXML、MIDI 与歌曲 JSON 格式转换，支持 PDF、PNG 导出。下载本地桌面版，或自行部署 Web 版。">
+  <meta name="theme-color" content="#f5f4ef">
+  <title>ScoreTranslate — 让乐谱，自由流转</title>
+  <style>
+    :root { --bg:#f5f4ef; --paper:#fffefa; --ink:#242620; --muted:#65675f; --line:#d7d8cf; --accent:#b34225; --soft:#edece4; }
+    * { box-sizing:border-box; }
+    html { scroll-behavior:smooth; scroll-padding-top:100px; }
+    body { margin:0; color:var(--ink); background:var(--bg); font:16px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; -webkit-font-smoothing:antialiased; }
+    a { color:inherit; text-underline-offset:4px; }
+    a:hover { color:var(--accent); }
+    button { font:inherit; }
+    a:focus-visible,button:focus-visible,summary:focus-visible { outline:3px solid var(--accent); outline-offset:5px; }
+    .wrap { width:min(1160px,calc(100% - 64px)); margin-inline:auto; }
+    .skip { position:fixed; top:-80px; left:16px; padding:10px 16px; background:var(--ink); color:white; z-index:10; }
+    .skip:focus { top:12px; }
+    .top { border-bottom:1px solid var(--line); }
+    .nav { min-height:84px; display:flex; align-items:center; justify-content:space-between; gap:24px; }
+    .brand { display:flex; align-items:center; gap:10px; font-size:19px; font-weight:750; letter-spacing:-.6px; text-decoration:none; }
+    .brand-mark { width:30px; height:30px; display:grid; place-items:center; background:var(--ink); color:var(--paper); border-radius:7px; font:20px Georgia,serif; }
+    .nav-links { display:flex; align-items:center; gap:28px; font-size:14px; }
+    .nav-links a { text-decoration:none; }
+    .lang { cursor:pointer; padding:5px 12px; background:transparent; color:var(--ink); border:1px solid var(--line); border-radius:6px; font-size:13px; }
+    h1,h2,h3,p,figure { margin:0; }
+    h1 { font-size:clamp(48px,5.4vw,76px); line-height:1.15; font-weight:650; letter-spacing:-3px; margin:22px 0; }
+    h1 em { color:var(--accent); font-style:normal; }
+    h2 { font-size:clamp(28px,3vw,38px); line-height:1.3; letter-spacing:-1px; font-weight:650; }
+    h3 { font-size:21px; line-height:1.4; letter-spacing:-.4px; }
+    .eyebrow { font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:1.5px; text-transform:uppercase; color:var(--accent); }
+    .hero { display:grid; grid-template-columns:1.05fr 1fr; align-items:center; gap:64px; padding:80px 0 64px; }
+    .lead { max-width:490px; color:var(--muted); font-size:18px; line-height:1.9; }
+    .actions { display:flex; flex-wrap:wrap; gap:12px; margin-top:30px; }
+    .button { display:inline-flex; justify-content:center; align-items:center; gap:18px; min-height:48px; padding:10px 21px; border:1px solid var(--ink); border-radius:6px; background:var(--ink); color:var(--paper); text-decoration:none; font-size:14px; font-weight:600; }
+    .button:hover { color:var(--paper); background:var(--accent); border-color:var(--accent); }
+    .button.secondary { background:transparent; color:var(--ink); border-color:var(--line); }
+    .button.secondary:hover { border-color:var(--ink); }
+    .small { font-size:13px; color:var(--muted); }
+    .hero-note { margin-top:18px; }
+    .score-visual { border:1px solid var(--line); background:var(--soft); border-radius:12px; padding:28px; overflow:hidden; }
+    .visual-label { display:flex; justify-content:space-between; gap:10px; font:11px ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:1px; color:var(--muted); }
+    .sheet { margin:24px 18px 26px; padding:24px 22px 14px; background:var(--paper); border:1px solid var(--line); box-shadow:0 12px 24px #2426200b; transform:rotate(-3deg); }
+    .sheet-top { display:flex; justify-content:space-between; align-items:center; gap:8px; border-bottom:1px solid var(--line); padding-bottom:14px; font:12px ui-monospace,SFMono-Regular,Menlo,monospace; }
+    .sheet-title { margin:20px 0 12px; text-align:center; font:italic 28px Georgia,serif; }
+    .sheet svg { display:block; width:100%; height:auto; color:var(--ink); }
+    .output-line { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; align-items:center; }
+    .output { background:var(--paper); border:1px solid var(--line); border-radius:5px; padding:6px 12px; font:12px ui-monospace,SFMono-Regular,Menlo,monospace; }
+    .output.selected { color:var(--accent); border-color:var(--accent); }
+    .visual-caption { text-align:center; font-size:11px; color:var(--muted); margin-top:16px; }
+    .facts { display:flex; flex-wrap:wrap; gap:16px 32px; padding:22px 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); color:var(--muted); font-size:13px; }
+    .facts>span::before { content:"+"; color:var(--accent); padding-right:10px; font-family:monospace; }
+    section { padding:72px 0; border-bottom:1px solid var(--line); }
+    .section-heading { display:flex; justify-content:space-between; align-items:flex-end; gap:30px; margin-bottom:32px; }
+    .section-heading .eyebrow { margin-bottom:12px; }
+    .section-heading>p { max-width:380px; color:var(--muted); font-size:14px; }
+    .table-wrap { overflow-x:auto; }
+    table { width:100%; border-collapse:collapse; text-align:left; font-size:14px; }
+    th { font-size:12px; color:var(--muted); font-weight:500; padding:0 20px 14px; }
+    th:first-child,td:first-child { padding-left:0; }
+    td { padding:18px 20px; border-top:1px solid var(--line); vertical-align:top; }
+    td:first-child { width:23%; font-weight:600; }
+    td code { display:inline-block; margin:2px 6px 2px 0; }
+    code,pre { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+    code { font-size:.88em; }
+    .format-note { color:var(--muted); font-size:13px; margin-top:18px; }
+    .tools { display:grid; grid-template-columns:repeat(3,1fr); gap:32px; }
+    .tool { border-top:2px solid var(--ink); padding-top:20px; }
+    .tool-number { font:12px ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--accent); margin-bottom:28px; }
+    .tool h3 { margin-bottom:12px; }
+    .tool p { color:var(--muted); font-size:14px; }
+    .song { display:grid; grid-template-columns:1fr 1fr; gap:60px; padding:36px; margin-top:42px; background:var(--soft); border-radius:8px; }
+    .song h3 { margin:10px 0 12px; }
+    .song p { color:var(--muted); font-size:14px; }
+    .song-files { display:flex; flex-direction:column; gap:14px; justify-content:center; }
+    .song-file { padding-bottom:14px; border-bottom:1px solid var(--line); }
+    .song-file:last-child { border-bottom:0; padding-bottom:0; }
+    .song-file code { font-size:14px; }
+    .song-file p { font-size:12px; margin-top:4px; }
+    .start-grid { display:grid; grid-template-columns:1fr 1fr; gap:40px; }
+    .start-card { min-width:0; display:flex; flex-direction:column; align-items:flex-start; padding:30px; border:1px solid var(--line); border-radius:8px; }
+    .start-card h3 { margin:12px 0; }
+    .start-card p { font-size:14px; color:var(--muted); }
+    .start-card .button { margin:24px 0 18px; }
+    .start-card pre { width:100%; margin:24px 0 18px; }
+    .start-card .text-link { margin-top:auto; padding-top:18px; font-size:13px; }
+    pre { background:#242620; color:#f4f3e9; padding:20px; font-size:13px; line-height:1.8; overflow-x:auto; border-radius:5px; }
+    .engine-note { display:flex; align-items:baseline; gap:24px; margin-top:24px; padding:20px 0 0; }
+    .engine-note strong { flex-shrink:0; font-size:14px; }
+    .engine-note p { color:var(--muted); font-size:13px; }
+    .faq { display:grid; grid-template-columns:1fr 1.6fr; gap:80px; }
+    .faq .eyebrow { margin-bottom:12px; }
+    details { border-bottom:1px solid var(--line); padding:18px 0; }
+    details:first-child { padding-top:0; }
+    details:last-child { border-bottom:0; }
+    summary { cursor:pointer; font-size:15px; font-weight:600; padding-right:12px; }
+    details p { font-size:14px; color:var(--muted); margin-top:12px; }
+    footer { display:flex; align-items:center; justify-content:space-between; gap:24px; padding:30px 0 40px; font-size:12px; color:var(--muted); }
+    .footer-links { display:flex; flex-wrap:wrap; gap:20px; }
+    [data-lang="en"] .zh,[data-lang="zh"] .en { display:none; }
+    @media (prefers-color-scheme:dark) {
+      :root { --bg:#191b18; --paper:#252821; --ink:#e9e9df; --muted:#adb0a3; --line:#3c4036; --accent:#e49675; --soft:#22251e; }
     }
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    background: var(--bg);
-    color: var(--fg);
-    font: 16px/1.7 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
-          "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-    -webkit-font-smoothing: antialiased;
-  }
-  .wrap { max-width: 780px; margin: 0 auto; padding: 0 24px 80px; }
-  code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-
-  /* 顶栏 */
-  .top {
-    display: flex; justify-content: flex-end; align-items: center;
-    gap: 8px; padding: 20px 0;
-  }
-  .lang {
-    border: 1px solid var(--border); background: none; color: var(--muted);
-    border-radius: 999px; padding: 4px 12px; font-size: 13px; cursor: pointer;
-    font-family: inherit;
-  }
-  .lang:hover { color: var(--fg); }
-
-  /* 头部 */
-  header { padding: 40px 0 48px; }
-  h1 { font-size: 44px; letter-spacing: -0.02em; margin: 0 0 16px; }
-  .tagline { font-size: 19px; color: var(--muted); margin: 0 0 12px; max-width: 34em; }
-  .note { font-size: 14px; color: var(--muted); margin: 0 0 28px; }
-  .actions { display: flex; gap: 12px; flex-wrap: wrap; }
-  .btn {
-    display: inline-block; text-decoration: none; font-size: 15px;
-    padding: 9px 18px; border-radius: var(--radius); border: 1px solid var(--fg);
-    background: var(--fg); color: var(--bg);
-  }
-  .btn.ghost { background: none; color: var(--fg); border-color: var(--border); }
-  .btn:hover { opacity: .85; }
-
-  /* 通用区块 */
-  section { padding: 36px 0; border-top: 1px solid var(--border); }
-  h2 { font-size: 15px; text-transform: uppercase; letter-spacing: .08em;
-       color: var(--muted); font-weight: 600; margin: 0 0 20px; }
-  p { margin: 0 0 14px; }
-
-  /* 转换矩阵 */
-  .flow { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
-  .col { flex: 1 1 240px; min-width: 0; }
-  .col h3 { font-size: 13px; color: var(--muted); font-weight: 500; margin: 0 0 10px; }
-  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
-  .chip {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: 13px; padding: 3px 9px; border-radius: 6px;
-    background: var(--card); border: 1px solid var(--border);
-  }
-  .arrow { font-size: 22px; color: var(--muted); flex: 0 0 auto; }
-  @media (max-width: 620px) {
-    .arrow { flex: 1 1 100%; text-align: center; transform: rotate(90deg); }
-  }
-
-  /* 特性 */
-  .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 18px; }
-  .feature { background: var(--card); border: 1px solid var(--border);
-             border-radius: var(--radius); padding: 18px 18px 20px; }
-  .feature h3 { font-size: 15px; margin: 0 0 8px; }
-  .feature p { font-size: 14px; color: var(--muted); margin: 0; }
-
-  pre {
-    background: var(--code-bg); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 14px 16px; overflow-x: auto;
-    font-size: 13.5px; line-height: 1.65; margin: 0 0 14px;
-  }
-  ul { margin: 0 0 14px; padding-left: 20px; }
-  li { margin-bottom: 8px; }
-  .limits li { color: var(--muted); font-size: 15px; }
-  .limits strong { color: var(--fg); font-weight: 600; }
-  footer { padding: 32px 0 0; border-top: 1px solid var(--border);
-           color: var(--muted); font-size: 14px; }
-  a { color: inherit; }
-
-  /* 语言切换：默认显示中文 */
-  [data-lang="en"] .zh, [data-lang="zh"] .en { display: none; }
-</style>
+    @media (max-width:900px) {
+      .hero { gap:28px; padding:60px 0 48px; }
+      h1 { font-size:52px; }
+      .score-visual { padding:20px; }
+      .sheet { margin-inline:4px; padding:18px 14px 10px; }
+      .faq { gap:36px; }
+      .start-grid { gap:20px; }
+      .song { gap:30px; }
+    }
+    @media (max-width:680px) {
+      .wrap { width:calc(100% - 40px); }
+      .nav { min-height:72px; gap:12px; }
+      .nav-links { gap:12px; }
+      .nav-section { display:none; }
+      .brand { font-size:17px; }
+      .hero { grid-template-columns:1fr; padding:48px 0 32px; gap:36px; }
+      h1 { font-size:clamp(44px,10vw,60px); letter-spacing:-2px; }
+      .lead { font-size:16px; }
+      .score-visual { max-width:480px; width:100%; margin-inline:auto; }
+      .sheet { margin-inline:24px; }
+      .facts { gap:10px 22px; font-size:12px; }
+      section { padding:48px 0; }
+      .section-heading { display:block; }
+      .section-heading>p { margin-top:16px; }
+      table { font-size:12px; min-width:520px; }
+      th,td { padding-left:12px; padding-right:12px; }
+      .tools,.song,.start-grid,.faq { grid-template-columns:1fr; gap:28px; }
+      .tool-number { margin-bottom:12px; }
+      .song { padding:24px; }
+      .start-card { padding:24px; }
+      .engine-note { display:block; }
+      .engine-note p { margin-top:8px; }
+      footer { flex-direction:column; align-items:flex-start; gap:12px; }
+    }
+    @media (max-width:380px) { .nav-links>a { display:none; } }
+    @media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } }
+  </style>
 </head>
 <body data-lang="zh">
-<div class="wrap">
-
+  <a class="skip" href="#main"><span class="zh">跳到正文</span><span class="en">Skip to content</span></a>
   <div class="top">
-    <button class="lang" id="langBtn">English</button>
+    <nav class="nav wrap" aria-label="Main">
+      <a class="brand" href="#"><span class="brand-mark" aria-hidden="true">♮</span>ScoreTranslate</a>
+      <div class="nav-links">
+        <a class="nav-section" href="#formats"><span class="zh">支持格式</span><span class="en">Formats</span></a>
+        <a class="nav-section" href="#start"><span class="zh">开始使用</span><span class="en">Get started</span></a>
+        <a href="https://github.com/tpnet/ScoreTranslate">GitHub ↗</a>
+        <button class="lang" id="langBtn" type="button" aria-label="Switch to English">English</button>
+      </div>
+    </nav>
   </div>
-
-  <header>
-    <h1>ScoreTranslate</h1>
-    <p class="tagline">
-      <span class="zh">本地乐谱格式转换工具。选择乐谱文件，转换成其它格式并下载。</span>
-      <span class="en">A local sheet-music format converter. Pick a score file, convert it, download the result.</span>
-    </p>
-    <p class="note">
-      <span class="zh">全程在本机完成，文件不上传到任何外部服务。</span>
-      <span class="en">Everything runs on your own machine — no file is ever uploaded anywhere.</span>
-    </p>
-    <div class="actions">
-      <a class="btn" href="https://github.com/tpnet/ScoreTranslate">
-        <span class="zh">在 GitHub 上查看</span><span class="en">View on GitHub</span>
-      </a>
-      <a class="btn ghost" href="#start">
-        <span class="zh">快速开始</span><span class="en">Get started</span>
-      </a>
-    </div>
-  </header>
-
-  <section>
-    <h2><span class="zh">转换矩阵</span><span class="en">Conversion matrix</span></h2>
-    <div class="flow">
-      <div class="col">
-        <h3><span class="zh">输入</span><span class="en">Input</span></h3>
-        <div class="chips">
-          <span class="chip">.mid</span><span class="chip">.midi</span><span class="chip">.gp</span>
-          <span class="chip">.gpx</span><span class="chip">.gp3</span><span class="chip">.gp4</span>
-          <span class="chip">.gp5</span><span class="chip">.mxl</span><span class="chip">.musicxml</span>
-          <span class="chip">.xml</span><span class="chip">.json</span><span class="chip">.atex</span>
+  <main id="main" class="wrap">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Open source · Sheet music converter</p>
+        <h1><span class="zh">让乐谱，<br><em>自由流转。</em></span><span class="en">Your music.<br><em>A new format.</em></span></h1>
+        <p class="lead"><span class="zh">从 Guitar Pro 到 MusicXML，从 MIDI 到可分享的 PDF。把手中的乐谱，转换成下一步需要的格式。</span><span class="en">From Guitar Pro to MusicXML. From MIDI to a shareable PDF. Turn the score you have into the format you need next.</span></p>
+        <div class="actions">
+          <a class="button" href="https://github.com/tpnet/ScoreTranslate/releases"><span class="zh">下载桌面版</span><span class="en">Download desktop</span><span aria-hidden="true">↗</span></a>
+          <a class="button secondary" href="#start"><span class="zh">自行部署 Web 版</span><span class="en">Run the web app</span><span aria-hidden="true">↓</span></a>
         </div>
+        <p class="small hero-note"><span class="zh">macOS / Windows · 免费开源 · MuseScore 4 需另装</span><span class="en">macOS / Windows · Free &amp; open source · MuseScore 4 installed separately</span></p>
       </div>
-      <div class="arrow">→</div>
-      <div class="col">
-        <h3><span class="zh">输出</span><span class="en">Output</span></h3>
-        <div class="chips">
-          <span class="chip">.mid</span><span class="chip">.musicxml</span><span class="chip">.xml</span>
-          <span class="chip">.mxl</span><span class="chip">.gp</span><span class="chip">.gp5</span>
-          <span class="chip">.json</span><span class="chip">.atex</span><span class="chip">.mscz</span>
-          <span class="chip">.pdf</span><span class="chip">.png</span>
+      <figure class="score-visual">
+        <div class="visual-label"><span>01 / SCORE IN</span><span>02 / FORMAT OUT</span></div>
+        <div class="sheet">
+          <div class="sheet-top"><span>score.gp5</span><span>GUITAR / 4:4</span></div>
+          <p class="sheet-title">A little more music.</p>
+          <svg viewBox="0 0 340 158" aria-hidden="true">
+            <g fill="none" stroke="currentColor" stroke-width=".7" opacity=".45"><path d="M10 32H330M10 42H330M10 52H330M10 62H330M10 72H330M10 110H330M10 118H330M10 126H330M10 134H330M10 142H330M10 150H330"/><path d="M10 32V72M168 32V72M329 32V72M10 110V150M168 110V150M329 110V150"/></g>
+            <g fill="currentColor"><ellipse cx="51" cy="62" rx="6" ry="4" transform="rotate(-20 51 62)"/><ellipse cx="90" cy="52" rx="6" ry="4" transform="rotate(-20 90 52)"/><ellipse cx="124" cy="42" rx="6" ry="4" transform="rotate(-20 124 42)"/><ellipse cx="198" cy="47" rx="6" ry="4" transform="rotate(-20 198 47)"/><ellipse cx="235" cy="57" rx="6" ry="4" transform="rotate(-20 235 57)"/><ellipse cx="282" cy="52" rx="6" ry="4" transform="rotate(-20 282 52)"/></g>
+            <g stroke="currentColor" stroke-width="1.4"><path d="M56 62V21M95 52V16M129 42V12M203 47V12M240 57V17M287 52V17"/><path d="M95 16L129 12M203 12L240 17" stroke-width="4"/></g>
+            <g fill="currentColor" font-family="monospace" font-size="10" text-anchor="middle"><text x="24" y="99">TAB</text><text x="51" y="137">0</text><text x="90" y="129">2</text><text x="124" y="121">3</text><text x="198" y="121">2</text><text x="235" y="129">0</text><text x="282" y="129">2</text></g>
+          </svg>
         </div>
-      </div>
-    </div>
-    <p style="margin-top:18px;font-size:14px;color:var(--muted)">
-      <span class="zh">单文件上限 50MB。PNG 按页导出，多页自动打包成 zip，也可以拼成一张纵向长图。PDF 可选纸张与缩放，MusicXML / PDF / PNG 可选六线谱或五线谱。多轨谱可以只导出选中的音轨，弹唱谱可以把歌词并入吉他等其他音轨。<code>.json</code> 是 alphaTab 的乐谱模型格式，便于在网页端渲染或二次处理；<code>.atex</code> 是 alphaTab 的文本谱格式 alphaTex，可以直接手写。</span>
-      <span class="en">50MB per file. PNG is exported page by page and zipped when the score spans several pages, or stitched into one long vertical image. PDF takes paper size and scaling; MusicXML / PDF / PNG take a staff type — tablature or standard notation. Multi-track scores can be narrowed to selected tracks, and lead-sheet lyrics can be merged onto the guitar and other tracks. <code>.json</code> is alphaTab's score model format, handy for rendering in the browser or further processing; <code>.atex</code> is alphaTab's text notation format, alphaTex, which you can write by hand.</span>
-    </p>
-  </section>
+        <div class="output-line"><span class="output selected">MusicXML</span><span class="output">PDF</span><span class="output">PNG</span><span class="output">GP</span></div>
+        <figcaption class="visual-caption"><span class="zh">格式转换示意 · 官网不上传或转换文件</span><span class="en">Conversion illustration · This page does not upload or convert files</span></figcaption>
+      </figure>
+    </header>
+    <div class="facts"><span><span class="zh">桌面本地转换</span><span class="en">Local desktop conversion</span></span><span><span class="zh">保留 TAB 与弦品</span><span class="en">TAB &amp; string/fret data</span></span><span><span class="zh">单文件 50 MB</span><span class="en">50 MB per file</span></span><span>MIT</span></div>
 
-  <section>
-    <h2><span class="zh">特点</span><span class="en">Highlights</span></h2>
-    <div class="features">
-      <div class="feature">
-        <h3><span class="zh">文件不出本机</span><span class="en">Nothing leaves your machine</span></h3>
-        <p><span class="zh">无数据库、无状态，转换在本地请求内同步完成，不经过任何云端服务。</span>
-           <span class="en">No database, no state. Conversion happens synchronously inside a local request — no cloud service involved.</span></p>
+    <section id="formats" aria-labelledby="formats-title">
+      <div class="section-heading">
+        <div><p class="eyebrow">01 / Formats</p><h2 id="formats-title"><span class="zh">不同格式，同一首乐曲。</span><span class="en">Different formats. Same music.</span></h2></div>
+        <p><span class="zh">继续编辑、打印成谱，或导出图片分享。先找到你的源文件，再选择需要的输出格式。</span><span class="en">Keep editing, print a score, or share an image. Start with your source file and choose an output.</span></p>
       </div>
-      <div class="feature">
-        <h3><span class="zh">自研 GP5 写出器</span><span class="en">A from-scratch GP5 writer</span></h3>
-        <p><span class="zh">开源生态里没有现成的 GP5 写出实现，本项目自己写了一个，并用两套独立解析器回读校验。</span>
-           <span class="en">No open-source GP5 writer existed, so this project ships one — verified by reading the output back with two independent parsers.</span></p>
+      <div class="table-wrap" role="region" aria-labelledby="formats-title" tabindex="0">
+        <table>
+          <thead><tr><th scope="col"><span class="zh">格式</span><span class="en">Format</span></th><th scope="col"><span class="zh">可导入</span><span class="en">Import</span></th><th scope="col"><span class="zh">可导出</span><span class="en">Export</span></th></tr></thead>
+          <tbody>
+            <tr><td>Guitar Pro</td><td><code>.gp</code><code>.gp5</code><code>.gp4</code><code>.gp3</code><code>.gpx</code></td><td><code>.gp</code> (GP7/8) <code>.gp5</code></td></tr>
+            <tr><td>MusicXML</td><td><code>.musicxml</code><code>.xml</code><code>.mxl</code></td><td><code>.musicxml</code><code>.xml</code><code>.mxl</code></td></tr>
+            <tr><td>MIDI</td><td><code>.mid</code><code>.midi</code></td><td><code>.mid</code></td></tr>
+            <tr><td>JSON / alphaTex</td><td><code>.json</code><code>.atex</code></td><td><code>.json</code> (alphaTab) <code>.atex</code></td></tr>
+            <tr><td><span class="zh">文档与图片</span><span class="en">Documents &amp; images</span></td><td>—</td><td><code>.mscz</code><code>.pdf</code><code>.png</code><span class="zh"> / PNG 长图</span><span class="en"> / long PNG</span></td></tr>
+          </tbody>
+        </table>
       </div>
-      <div class="feature">
-        <h3><span class="zh">保留六线谱信息</span><span class="en">Tablature survives</span></h3>
-        <p><span class="zh">Guitar Pro 转 MusicXML 走自研序列化器，保住 TAB 谱表、调弦和每个音的弦号品格。</span>
-           <span class="en">Guitar Pro → MusicXML goes through a custom serializer that keeps TAB staves, tunings and per-note string/fret data.</span></p>
-      </div>
-    </div>
-  </section>
+      <p class="format-note"><span class="zh">GP3 / GP4 / GPX 仅支持导入。JSON 可读 LL 原始详情、二维 GP 时间线与 alphaTab 模型，输出统一为 alphaTab 乐谱模型。</span><span class="en">GP3 / GP4 / GPX are input-only. JSON accepts LL song details, two-dimensional GP timelines and alphaTab models; JSON output always uses the alphaTab score model.</span></p>
+    </section>
 
-  <section id="start">
-    <h2><span class="zh">快速开始</span><span class="en">Get started</span></h2>
-    <p><span class="zh">需要 <a href="https://bun.sh">bun</a> 与 <a href="https://musescore.org">MuseScore 4</a>（作为转换引擎，需本机安装）。</span>
-       <span class="en">You need <a href="https://bun.sh">bun</a> and <a href="https://musescore.org">MuseScore 4</a>, which acts as the conversion engine and must be installed locally.</span></p>
-<pre>git clone https://github.com/tpnet/ScoreTranslate.git
+    <section id="features" aria-labelledby="features-title">
+      <div class="section-heading"><div><p class="eyebrow">02 / The details matter</p><h2 id="features-title"><span class="zh">不只是换一个扩展名。</span><span class="en">More than a new extension.</span></h2></div></div>
+      <div class="tools">
+        <article class="tool"><p class="tool-number">01 — NOTATION</p><h3><span class="zh">让六线谱保持完整</span><span class="en">Keep the tablature</span></h3><p><span class="zh">Guitar Pro 转 MusicXML 保留 TAB、调弦与每个音的弦号品位。MusicXML、PDF、PNG 可选择六线谱或五线谱。</span><span class="en">Guitar Pro to MusicXML retains TAB staves, tuning and each note's string/fret data. Choose tablature or standard notation for MusicXML, PDF and PNG.</span></p></article>
+        <article class="tool"><p class="tool-number">02 — ARRANGEMENT</p><h3><span class="zh">只留下需要的声部</span><span class="en">Choose the parts you need</span></h3><p><span class="zh">所有输出格式均支持选轨。制作弹唱谱时，可把人声歌词按时间并入吉他等音轨，方便边弹边唱。</span><span class="en">Select tracks for any output format. For lead sheets, align vocal lyrics with the guitar and other parts.</span></p></article>
+        <article class="tool"><p class="tool-number">03 — EXPORT</p><h3><span class="zh">为打印与分享准备好</span><span class="en">Ready to print or share</span></h3><p><span class="zh">PDF 可调纸张与缩放，PNG 可调 DPI 与裁边。多页图片自动打包 ZIP，也可纵向拼成长图。</span><span class="en">Set PDF paper size and scale, or PNG resolution and margins. Multipage images arrive as a ZIP or one long vertical image.</span></p></article>
+      </div>
+      <div class="song">
+        <div><p class="eyebrow">Song JSON → Guitar Pro</p><h3><span class="zh">把歌曲数据，变成可编辑乐谱。</span><span class="en">Turn song data into an editable score.</span></h3><p><span class="zh">保留独立音轨、歌词、和弦与段落。导出前校验调弦和弦品；无法保留音高时明确报错。</span><span class="en">Retain tracks, lyrics, chords and sections. Tuning and string/fret data are validated before export; conversion fails if pitches cannot be preserved.</span></p></div>
+        <div class="song-files"><div class="song-file"><code>lyrics-*.json</code><p><span class="zh">LL 原始详情 · 读取歌曲速度 · 目前仅支持 4/4</span><span class="en">LL raw details · Reads song tempo · Currently 4/4 only</span></p></div><div class="song-file"><code>*.gp.json</code><p><span class="zh">二维 GP 时间线 · 默认 120 BPM，请设置原曲速度</span><span class="en">2D GP timeline · Defaults to 120 BPM; set the original tempo</span></p></div></div>
+      </div>
+    </section>
+
+    <section id="start" aria-labelledby="start-title">
+      <div class="section-heading"><div><p class="eyebrow">03 / Get started</p><h2 id="start-title"><span class="zh">选择适合你的使用方式。</span><span class="en">Make it part of your workflow.</span></h2></div><p><span class="zh">日常使用下载桌面版；需要浏览器访问时，自行运行 Web 服务。</span><span class="en">Download the desktop app for everyday use, or host the web app for browser access.</span></p></div>
+      <div class="start-grid">
+        <article class="start-card"><p class="eyebrow">Desktop</p><h3><span class="zh">下载，打开，转换。</span><span class="en">Download. Open. Convert.</span></h3><p><span class="zh">macOS 13+ 支持 Apple Silicon 与 Intel；Windows x64 提供安装版与免安装版。转换在本机完成，无需 Bun 或 Node.js。</span><span class="en">macOS 13+ on Apple Silicon and Intel; installer and portable versions for Windows x64. Conversion runs locally, without Bun or Node.js.</span></p><a class="button" href="https://github.com/tpnet/ScoreTranslate/releases"><span class="zh">查看下载版本</span><span class="en">View downloads</span><span aria-hidden="true">↗</span></a><p class="small"><span class="zh">Windows 免安装版需要 WebView2 Runtime。首次启动的系统拦截处理见下方常见问题。</span><span class="en">Windows portable requires WebView2 Runtime. See below for first-launch security prompts.</span></p><a class="text-link doc-link" href="https://github.com/tpnet/ScoreTranslate/blob/main/README.md"><span class="zh">阅读完整使用文档 ↗</span><span class="en">Read the full documentation ↗</span></a></article>
+        <article class="start-card"><p class="eyebrow">Self-hosted web</p><h3><span class="zh">在浏览器里处理乐谱。</span><span class="en">Work in your browser.</span></h3><p><span class="zh">安装 Bun 与 MuseScore 4，获取源码后运行：</span><span class="en">Install Bun and MuseScore 4, then clone and run:</span></p><pre><code>git clone https://github.com/tpnet/ScoreTranslate.git
 cd ScoreTranslate
-bun install &amp;&amp; bun run dev</pre>
-    <p><span class="zh">打开 <code>http://localhost:3000</code> 即可使用。MuseScore 装在非默认位置时，用环境变量指定：</span>
-       <span class="en">Then open <code>http://localhost:3000</code>. If MuseScore lives somewhere other than the default path, point to it with an environment variable:</span></p>
-<pre>export MSCORE_PATH=/your/path/to/mscore</pre>
-    <p><span class="zh">界面之外也可以直接调接口：</span>
-       <span class="en">The endpoint can also be called directly:</span></p>
-<pre>curl -O -J -F "file=@score.gp5" -F "target=pdf" \
-  http://localhost:3000/api/convert</pre>
-  </section>
+bun install
+bun run dev</code></pre><p class="small"><span class="zh">打开 <a href="http://localhost:3000">localhost:3000</a>。Web 文件由部署服务器处理；本机部署时文件留在本机。</span><span class="en">Open <a href="http://localhost:3000">localhost:3000</a>. Files are processed by your server; hosting locally keeps them on your machine.</span></p><a class="text-link doc-link" href="https://github.com/tpnet/ScoreTranslate/blob/main/README.md"><span class="zh">部署说明与 HTTP 接口 ↗</span><span class="en">Deployment &amp; HTTP API docs ↗</span></a></article>
+      </div>
+      <div class="engine-note"><strong>MuseScore 4 + alphaTab</strong><p><span class="zh">MuseScore 4 需<a href="https://musescore.org">单独安装</a>。未安装时，Guitar Pro / JSON / alphaTex 之间互转及导出 MusicXML 仍可用；PDF、PNG、MIDI 等转换需要它。非默认安装路径可用 <code>MSCORE_PATH</code> 指定。</span><span class="en">Install <a href="https://musescore.org">MuseScore 4 separately</a>. Without it, Guitar Pro / JSON / alphaTex conversions and MusicXML export still work. PDF, PNG, MIDI and other conversions require it. Set <code>MSCORE_PATH</code> for a custom install location.</span></p></div>
+    </section>
 
-  <section>
-    <h2><span class="zh">已知限制</span><span class="en">Known limitations</span></h2>
-    <ul class="limits">
-      <li>
-        <strong><span class="zh">gp3 / gp4 / gpx 只能输入、不能输出。</span><span class="en">gp3 / gp4 / gpx are input-only.</span></strong>
-        <span class="zh">能打开 gp3/gp4 的软件都能打开 gp5；gpx 是 GP6 独有的专有容器，GP6 已被官方放弃。</span>
-        <span class="en">Anything that opens gp3/gp4 also opens gp5, and gpx is GP6's proprietary container — a version the vendor has abandoned.</span>
-      </li>
-      <li>
-        <strong><span class="zh">GP5 输出保留演奏效果。</span><span class="en">GP5 output preserves playing techniques.</span></strong>
-        <span class="zh">推弦、击勾弦、滑音、泛音、闷音、颤音、倚音、扫弦等随音符一并写出（GP5 格式没有的除外，如左手点弦）；和弦图不保留。</span>
-        <span class="en">Bends, hammer-ons, slides, harmonics, palm mutes, vibrato, grace notes and strums are written alongside the notes (except what the GP5 format cannot express, e.g. left-hand taps); chord diagrams are not preserved.</span>
-      </li>
-      <li>
-        <strong><span class="zh">MIDI 转记谱格式有质量天花板。</span><span class="en">MIDI-to-notation has a quality ceiling.</span></strong>
-        <span class="zh">MIDI 不携带谱面信息，结果由量化算法推断，演奏录制的 MIDI 通常需要手工整理。这是格式本身的限制。</span>
-        <span class="en">MIDI carries no engraving information, so the result is inferred by quantization. Performance-recorded MIDI usually needs manual cleanup — that is inherent to the format.</span>
-      </li>
-    </ul>
-  </section>
-
-  <footer>
-    <span class="zh">MIT 许可证 · 转换引擎 MuseScore 4 与 alphaTab · </span>
-    <span class="en">MIT licensed · Powered by MuseScore 4 and alphaTab · </span>
-    <a href="https://github.com/tpnet/ScoreTranslate">github.com/tpnet/ScoreTranslate</a>
-  </footer>
-
-</div>
-<script>
-  const body = document.body, btn = document.getElementById('langBtn');
-  const set = (lang) => {
-    body.dataset.lang = lang;
-    document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
-    btn.textContent = lang === 'zh' ? 'English' : '简体中文';
-  };
-  set(navigator.language.startsWith('zh') ? 'zh' : 'en');
-  btn.onclick = () => set(body.dataset.lang === 'zh' ? 'en' : 'zh');
-</script>
+    <section class="faq" aria-labelledby="faq-title">
+      <div><p class="eyebrow">04 / Good to know</p><h2 id="faq-title"><span class="zh">使用前，了解这些。</span><span class="en">A few things to know.</span></h2></div>
+      <div>
+        <details><summary><span class="zh">文件会上传到云端吗？</span><span class="en">Are my files sent to the cloud?</span></summary><p><span class="zh">桌面版在本机转换。Web 版会把文件传给你使用的部署服务器，本机运行服务器时文件不会离开本机。本官网只提供介绍、下载和文档入口，不接收乐谱上传。</span><span class="en">Desktop conversion runs on your machine. The web app sends files to the server you use; a local server keeps them local. This website provides information, downloads and documentation, with no score uploads.</span></p></details>
+        <details><summary><span class="zh">首次启动被系统拦截怎么办？</span><span class="en">What if the OS blocks the first launch?</span></summary><p><span class="zh">应用未做正式开发者签名与公证。macOS 可到「系统设置 → 隐私与安全性」选择「仍要打开」；Windows 在 SmartScreen 中选择「更多信息 → 仍要运行」。</span><span class="en">The app has no formal developer signing or notarization. On macOS, select “Open Anyway” in System Settings → Privacy &amp; Security. On Windows, select “More info → Run anyway” in SmartScreen.</span></p></details>
+        <details><summary><span class="zh">GP5 导出有哪些取舍？</span><span class="en">What are the GP5 export limits?</span></summary><p><span class="zh">自研写出器保留音符、节奏与 GP5 支持的演奏效果，并经 alphaTab 与 MuseScore 双解析器回读校验。不保留和弦图，非 ASCII 文本会变为问号。非吉他谱转 GP5 时，超出音域的音符可能按八度折叠；歌曲 JSON 路径会在音高改变时报错。</span><span class="en">The custom writer preserves notes, rhythms and supported techniques, with readback checks through alphaTab and MuseScore. Chord diagrams are omitted and non-ASCII text becomes question marks. Non-guitar scores may have out-of-range notes folded by octaves; song JSON conversion fails if pitches would change.</span></p></details>
+        <details><summary><span class="zh">转换后的谱子需要校正吗？</span><span class="en">Will I need to correct the converted score?</span></summary><p><span class="zh">MIDI 缺少声部、连音线等谱面信息，记谱由 MuseScore 量化推断，通常需要整理。识别草稿也需对照原谱。歌曲 JSON 的跨软件连音播放存在已知差异，Guitar Pro 桌面端尚未人工试听确认，详见 README。</span><span class="en">MIDI lacks engraving details such as voices and ties; MuseScore infers notation through quantization, so manual cleanup is often needed. Check recognized drafts against the original. Song JSON has known tie-playback differences between apps and has not been manually auditioned in Guitar Pro; see the README.</span></p></details>
+        <details><summary><span class="zh">为什么 PNG 长图导出失败？</span><span class="en">Why did my long PNG export fail?</span></summary><p><span class="zh">长图有 1 亿像素上限，超过时会报错。降低 DPI 后重试，或选择普通 PNG，将多页图片打包为 ZIP。每个输入文件最大 50 MB。</span><span class="en">Long PNG exports are limited to 100 million pixels. Lower the DPI or choose regular PNG for a ZIP of separate pages. Each input file is limited to 50 MB.</span></p></details>
+      </div>
+    </section>
+  </main>
+  <footer class="wrap"><p>ScoreTranslate <span aria-hidden="true">/</span> <span class="zh">让乐谱，自由流转。</span><span class="en">Keep your music moving.</span></p><div class="footer-links"><a href="https://github.com/tpnet/ScoreTranslate/blob/main/LICENSE">MIT License</a><a class="doc-link" href="https://github.com/tpnet/ScoreTranslate/blob/main/README.md"><span class="zh">使用文档</span><span class="en">Documentation</span></a><a href="https://github.com/tpnet/ScoreTranslate">GitHub ↗</a></div></footer>
+  <script>
+    const button = document.getElementById('langBtn');
+    const setLanguage = (language) => {
+      const chinese = language === 'zh';
+      document.body.dataset.lang = language;
+      document.documentElement.lang = chinese ? 'zh-CN' : 'en';
+      button.textContent = chinese ? 'English' : '简体中文';
+      button.setAttribute('aria-label', chinese ? 'Switch to English' : '切换到简体中文');
+      document.title = chinese ? 'ScoreTranslate — 让乐谱，自由流转' : 'ScoreTranslate — Keep your music moving';
+      document.querySelector('meta[name="description"]').content = chinese
+        ? 'Guitar Pro、MusicXML、MIDI 与歌曲 JSON 格式转换，支持 PDF、PNG 导出。下载本地桌面版，或自行部署 Web 版。'
+        : 'Convert Guitar Pro, MusicXML, MIDI and song JSON. Export PDF and PNG. Download the local desktop app or host the web version yourself.';
+      document.querySelectorAll('.doc-link').forEach(link => {
+        link.href = `https://github.com/tpnet/ScoreTranslate/blob/main/README${chinese ? '' : '.en'}.md`;
+      });
+    };
+    setLanguage(navigator.language.startsWith('zh') ? 'zh' : 'en');
+    button.addEventListener('click', () => setLanguage(document.body.dataset.lang === 'zh' ? 'en' : 'zh'));
+  </script>
 </body>
 </html>
