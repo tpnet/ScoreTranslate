@@ -1,0 +1,4 @@
+- [x] 提取共用转换核心与 Web 渲染适配，兼容 HTTP 接口。
+- [x] React + Vite 界面，桌面 Worker 与 Rust IPC。
+- [x] 移除 sidecar/Next.js，更新配置、CI、文档。
+- [x] 类型、构建、真实文件回归、桌面运行与体积验证。

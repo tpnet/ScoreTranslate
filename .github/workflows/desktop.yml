@@ -1,5 +1,4 @@
-# 桌面安装包。sidecar 复制的是构建机上的 bun，只能打本机架构的包，
-# 所以每个平台各用一台对应系统的 runner。在 Actions 页面手动触发，产物从运行详情里下载
+# 各平台使用本机 runner 构建 Tauri；安装包仅包含静态前端和 Rust 主程序。
 name: desktop
 
 on:

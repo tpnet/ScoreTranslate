@@ -3,5 +3,5 @@
 /target/
 /gen/schemas
 
-# prepare-sidecar.mjs 构建时复制的 bun
+# 旧版 sidecar 构建缓存，不再打包
 /binaries/

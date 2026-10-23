@@ -1,21 +1,14 @@
-import type { Metadata } from "next";
-import "./globals.css";
+import { useEffect, useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { MSCORE, mscoreMajor } from "@/lib/convert";
+import type { MuseScoreStatus } from "@/lib/formats";
+import { getStatus } from "./platform";
 
-// 每次请求都重新查一遍，否则构建期的检测结果会被固化进静态产物
-export const dynamic = "force-dynamic";
-
-export const metadata: Metadata = {
-  title: "乐谱格式转换",
-  description: "MIDI / Guitar Pro / MusicXML 乐谱格式互转，支持导出 PDF 与图片",
-};
-
-export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const major = await mscoreMajor();
-  return (
-    <html lang="zh-CN">
-      <body>
+export function MuseScoreNotice() {
+  const [status, setStatus] = useState<MuseScoreStatus | null>(null);
+  useEffect(() => { void getStatus().then(setStatus).catch(() => setStatus({ major: null, path: "MuseScore 4" })); }, []);
+  if (!status) return null;
+  const { major, path } = status;
+  return <>
         {major !== null && major < 4 ? (
           <Alert variant="destructive" className="rounded-none border-x-0 border-t-0">
             <AlertDescription className="block">
@@ -28,15 +21,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         ) : major === null ? (
           <Alert variant="destructive" className="rounded-none border-x-0 border-t-0">
             <AlertDescription className="block">
-              未在 <code className="font-mono">{MSCORE}</code> 检测到 MuseScore 4，仅 Guitar Pro 输入转 MusicXML / gp /
-              gp5 可用，其余格式会转换失败。请从 musescore.org 安装（macOS 也可{" "}
+              未在 <code className="font-mono">{path}</code> 检测到 MuseScore 4。Guitar Pro / JSON / alphaTex
+              之间及转 MusicXML 仍可用，其余转换需要安装 MuseScore。请从 musescore.org 安装（macOS 也可{" "}
               <code className="font-mono">brew install --cask musescore</code>
               ）；装在别处时，用环境变量 <code className="font-mono">MSCORE_PATH</code> 指向其可执行文件。
             </AlertDescription>
           </Alert>
         ) : null}
-        {children}
-      </body>
-    </html>
-  );
+  </>;
 }
