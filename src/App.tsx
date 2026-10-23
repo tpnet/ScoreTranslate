@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,6 +20,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
+import { request } from "./platform";
 
 const ACCEPT = ".mid,.midi,.gp,.gpx,.gp3,.gp4,.gp5,.mxl,.musicxml,.xml,.json,.atex";
 
@@ -87,7 +86,7 @@ export default function Home() {
     let stale = false;
     const form = new FormData();
     form.append("file", file);
-    fetch("/api/tracks", { method: "POST", body: form })
+    request("tracks", form)
       .then((r) => (r.ok ? r.json() : null))
       .then((body: { tracks?: string[] } | null) => {
         if (stale || !body?.tracks) return;
@@ -123,7 +122,7 @@ export default function Home() {
       }
       // 全选等同缺省，不用传
       if (tracks && sel.length < tracks.length) form.append("tracks", sel.join(","));
-      const res = await fetch("/api/convert", { method: "POST", body: form });
+      const res = await request("convert", form);
       if (!res.ok) {
         const body = await res.json().catch(() => null);
         throw new Error(body?.error ?? `转换失败（HTTP ${res.status}）`);
@@ -134,7 +133,7 @@ export default function Home() {
       a.href = url;
       a.download = filename;
       a.click();
-      URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (e) {
       setError(e instanceof Error ? e.message : "转换失败");
     } finally {

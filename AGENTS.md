@@ -1,26 +1,31 @@
 # CLAUDE.md
 
-乐谱格式转换 Web 工具。bun + Next.js 15 App Router，无数据库、无状态，转换在请求内同步完成。
+乐谱格式转换工具。React + Vite 前端，Web 使用 Bun API，桌面使用 Tauri Rust IPC。共用纯 TypeScript 转换核心，无数据库。
 
 ## 命令
 
 ```bash
-bun run dev     # 开发服务器，localhost:3000
-bun run build   # 生产构建（改完转换逻辑后跑一次，确保类型和打包没问题）
-bun tauri build # 桌面安装包，内部先跑 next build，产物在 src-tauri/target/release/bundle/
+bun run dev             # Vite localhost:3000 + Bun API localhost:3001
+bun run build           # TypeScript 检查 + Vite 静态构建到 dist/
+bun run start           # Bun 提供 dist/ 和 API，默认 127.0.0.1:3000
+bun run verify          # Web HTTP 真实文件回归，需要 MuseScore 4
+bun run verify --native # 自动构建原生校验入口，验证同一组 Rust 转换链路
+bun tauri dev           # Vite + Tauri 开发窗口
+bun tauri build         # 静态资源 + Rust 打包，产物在 src-tauri/target/release/bundle/
 ```
-
-⚠️ 三者共用 `.next` 目录，两种 build 都会覆盖 dev server 的产物，导致运行中的 dev server 报 `ENOENT ... route.js` 并对所有请求返回 500。**不要在 dev server 运行时跑 build**；若已发生，`rm -rf .next` 后重启 dev server。
 
 ## 结构
 
 - `lib/convert.ts` — 转换核心与路由
 - `lib/gp5-writer.ts` — GP5 v5.00 二进制写出器 + 弦品指派算法
 - `lib/gp-to-musicxml.ts` — alphaTab 乐谱模型 → MusicXML 序列化器（保留 TAB/弦品）
-- `app/api/convert/route.ts` — multipart 上传，校验后返回文件流
-- `app/api/tracks/route.ts` — 返回音轨名列表，供前端勾选导出哪些轨
-- `app/page.tsx` — 单页界面
-- `src-tauri/` — Tauri 桌面外壳（见「桌面版」）
+- `server/convert.ts` — multipart 上传，校验后返回文件流
+- `server/tracks.ts` — 返回音轨名列表，供前端勾选导出哪些轨
+- `src/App.tsx` — 单页界面
+- `src/convert.worker.ts` — 桌面后台转换，复用 `lib/convert.ts`
+- `lib/formats.ts` / `lib/request.ts` — 格式、参数与上传校验
+- `server/render.ts` / `src-tauri/src/render.rs` — 两端 MuseScore、PNG 适配
+- `src-tauri/` — Tauri 静态页面与原生命令（见「桌面版」）
 
 ## 转换链路
 
@@ -29,7 +34,7 @@ bun tauri build # 桌面安装包，内部先跑 next build，产物在 src-taur
 - **gp 系输入（gp/gpx/gp3/gp4/gp5；alphaTab JSON 和 alphaTex 先转成 `.gp` 再走这条）→ MusicXML 系 / gp / gp5 / json / atex**：alphaTab 直接解析原文件，不经过 MuseScore。MusicXML 由 `gp-to-musicxml.ts` 自研序列化——因为 MuseScore 的 MusicXML 导出会丢掉 TAB 谱表、调弦和全部弦/品信息。写 MusicXML 时**用实际发声音高、不写 `<transpose>` 八度声明**：MuseScore 4 导入时忽略该声明，按吉他记谱惯例写高八度会导致品位整体上移 12 品（曾实测踩坑）。
 - **其余转换**：MuseScore 4 CLI 负责解析和导出（mid/pdf/png/mscz 及非 gp 输入）。非 gp 输入转 `.gp` / `.gp5` / `.atex` 走两段：MuseScore 先转 MusicXML，`.gp` 由 alphaTab 的 `Gp7Exporter` 写出，`.gp5` 由自研写出器写出，`.atex` 由 alphaTab 的 `AlphaTexExporter` 写出。
 
-导出配置见 `ConvertOptions`（lib/convert.ts）：png 的 DPI/裁边走 `-r`/`-T`，pdf 的纸张/缩放走 `-S` 临时样式文件，mid 展开反复走 `--unroll-repeats`，MusicXML/pdf/png 目标的谱表类型（TAB/五线谱）由自研序列化器处理：gp 输入直接解析；非 gp 输入选 TAB 时先由 MuseScore 桥接成 MusicXML、`ensureFingerings` 指派弦品后重新序列化；pdf/png 最后交回 MuseScore 渲染。这些是 MuseScore CLI 仅有的相关开关，别的"配置项"CLI 不支持，gp/gp5/mscz 转换本身无参数。
+导出配置见 `ConvertOptions`（lib/formats.ts）：png 的 DPI/裁边走 `-r`/`-T`，pdf 的纸张/缩放走 `-S` 临时样式文件，mid 展开反复走 `--unroll-repeats`，MusicXML/pdf/png 目标的谱表类型（TAB/五线谱）由自研序列化器处理：gp 输入直接解析；非 gp 输入选 TAB 时先由 MuseScore 桥接成 MusicXML、`ensureFingerings` 指派弦品后重新序列化；pdf/png 最后交回 MuseScore 渲染。这些是 MuseScore CLI 仅有的相关开关，别的"配置项"CLI 不支持，gp/gp5/mscz 转换本身无参数。
 
 `tracks`（只导出选中音轨，对全部目标格式生效）统一在 alphaTab 模型上过滤，下标由 `listTracks` 给出——它和转换走同一条解析链路（gp 系 alphaTab 直连，其余先经 MuseScore 桥接成 MusicXML），下标才对得上。因此 pdf/png/mid/mscz 这些本来直接丢给 MuseScore 的目标，在选轨时被迫先过一遍 alphaTab：gp 输入指定了谱表类型走自研 MusicXML 序列化，未指定则重新导出只含选中轨的 `.gp` 交回 MuseScore，避免改变"跟随原谱"的渲染；非 gp 输入一律 MuseScore 桥接成 MusicXML 后重新序列化。**gp/gp5/json/atex 目标必须排除在这段桥接之外**——它们下面有自己的桥接，过两遍会按已过滤后的下标再过滤一次。过滤不重排 `track.index`——`gp-to-musicxml.ts` 用它拼 part id。atex 目标是例外：`AlphaTexExporter` 只在 `index === 0` 的音轨上写小节级信息（拍号、调号、速度、反复、段落），滤掉首轨会全部静默丢失，所以导出前由 `reindexTracks` 重排 index，并同步改键按 index 索引的 stylesheet 逐轨设置。
 
@@ -47,11 +52,11 @@ bun tauri build # 桌面安装包，内部先跑 next build，产物在 src-taur
 
 ## 改动时必须知道的三件事
 
-**1. 不能用退出码判断 MuseScore 成败。** MuseScore 4 无头转换成功后，进程退出阶段会崩溃（`mutex lock failed`），退出码非零但产物已正常生成。`mscore()` 因此吞掉除 `ENOENT` 外的所有错误，改由调用方检查产物文件是否存在。如果给它加上退出码检查，所有转换都会失败。
+**1. 不能用退出码判断 MuseScore 成败。** MuseScore 4 无头转换成功后，进程退出阶段会崩溃（`mutex lock failed`），退出码非零但产物已正常生成。Web 和 Rust 的渲染适配因此以产物是否存在判断成功，保留启动失败与超时处理。如果给它加上退出码检查，所有转换都会失败。
 
 **2. PNG 是多文件输出。** MuseScore 把 `-o output.png` 展开成 `output-1.png`、`output-2.png`……单页直接返回 PNG，多页打包成 zip，所以返回的扩展名和用户选的目标格式不一定一致——前端靠响应头 `X-Filename` 拿真实文件名，不要假设它等于目标格式。
 
-`png-long` 拼接期间同时持有全部页面和整张输出图的 RGBA 缓冲，因此先读各页 PNG 头（IHDR 宽高在固定偏移 16/20）算出总尺寸，超过 `MAX_LONG_PIXELS`（1 亿像素）直接报错——否则 1200 DPI 的单页 A4 就有 1.4 亿像素，解码后必然 OOM。
+`png-long` 先检查所有页面总尺寸，超过 `MAX_LONG_PIXELS`（1 亿像素）直接报错。Web 保留 PNG 头预检与白底 RGBA 拼接；Rust 在预检后逐页解码、合成白底 RGB，降低峰值内存——否则 1200 DPI 的单页 A4 就有 1.4 亿像素，解码后必然 OOM。
 
 `Content-Disposition` 同时给出 `filename=`（非 ASCII 字符替换为下划线）和 `filename*=UTF-8''`，两者缺一不可：浏览器用后者拿到中文原名，而 `curl -J` 只认前者，只给 `filename*=` 会导致 curl 存不下文件。
 
@@ -59,18 +64,19 @@ bun tauri build # 桌面安装包，内部先跑 next build，产物在 src-taur
 
 ## 桌面版（src-tauri/）
 
-Web 代码原样复用，没有改成 Tauri 前端：`next.config.ts` 输出 standalone，Tauri 把 `.next/standalone` 作为 resources 打进包（`server/`），把 bun 作为 externalBin sidecar，`main.rs` 用 bun 跑 `server.js`，窗口加载 `http://127.0.0.1:<随机端口>`。`prepare-sidecar.mjs` 复制的是构建机上正在运行的 bun，所以只能打本机架构的包，Windows 包走 `.github/workflows/desktop.yml`。以下几处删掉不会报错，但会静默坏掉：
+Vite 的 `dist/` 通过 `frontendDist` 嵌入 Rust 主程序，窗口加载 `tauri://localhost`，不携带 Bun/Node/Next.js，不启动 HTTP 服务。`src/platform.ts` 区分 Web API 与桌面 IPC，桌面在 `convert.worker.ts` 中执行共用转换核心，主线程只中转原生请求。Windows 安装包由 `.github/workflows/desktop.yml` 构建。
 
-- **`Entitlements.plist` 的 `allow-jit`**：打包时 Tauri 用 hardened runtime 重签 bun，并丢掉 bun 原有的 entitlements。缺了它 JavaScriptCore 不报错，而是退回解释器，转换慢约 50 倍。
-- **`Cargo.toml` 的 `strip = false`**：Rust 工具链剥离后的 Mach-O 字符串表只按 4 字节对齐，macOS 27 的 dyld 拒绝加载，表现为 proc-macro 随机报 `can't find crate`。release 默认会剥 debuginfo，所以必须显式写 false。
-- **下载处理器只在 macOS 设**：WKWebView 没有下载界面，不设 `on_download` 时 `<a download>` 会被直接取消。当前实现是存到「下载」文件夹，然后在访达中选中。WebView2 自带下载气泡，一旦设了处理器反而会被隐藏。
-- **`disable_drag_drop_handler()`**：不关的话 Tauri 会截获文件拖放，页面的拖拽上传收不到文件。
-- **`HOSTNAME=127.0.0.1`**：standalone 默认监听 0.0.0.0，会把转换接口暴露给局域网。
-- **`outputFileTracingExcludes`**：排除 sharp（构建机平台的原生库）和 typescript（配置已内联进 server.js），standalone 从 71MB 降到 45MB。
+- **alphaTab 核心入口**：Vite alias 指向 `alphaTab.core.mjs`。完整入口会在 Worker 内自动初始化 alphaTab 自己的消息处理；本项目只需要模型导入导出，不能启用它。
+- **二进制 IPC**：原始字节通过 Tauri raw body / `ipc::Response` 传输，避免大型数字 JSON 数组。Worker 使用 transferable；需要 PDF 回退的输入必须保留原缓冲。
+- **原生边界**：只接受白名单输入/目标格式、限定导出参数和输入大小；临时文件由 `tempfile` 自动清理，MuseScore 设 120 秒超时。
+- **`Cargo.toml` 的 `strip = false`**：Rust 工具链剥离后的 Mach-O 字符串表只按 4 字节对齐，macOS 27 的 dyld 会拒绝加载；保留该配置。
+- **macOS 下载处理器**：WKWebView 需要 `on_download`，完成后在访达选中；Windows 使用 WebView2 自带下载界面。
+- **`disable_drag_drop_handler()`**：让网页收到 HTML5 拖拽上传。
+- **Web 默认仅监听本机**：`server/index.ts` 默认 `127.0.0.1`，远程部署必须显式配置 `HOSTNAME`。
 
 ## 验证方式
 
-本项目不写 JVM/单元测试，改完转换逻辑用 curl 打真实文件验证：
+本项目不写 JVM/单元测试。修改转换逻辑后运行 `bun run build`、`bun run verify`；涉及 Rust 或桌面适配时再运行 `bun run verify --native`、`bun tauri build`。校验脚本使用真实 HTTP/MuseScore 和固定乐谱，包含 GP5 双解析器回读。也可用 curl 验证具体文件：
 
 ```bash
 curl -s -o out.pdf -w "%{http_code}\n" -F "file=@score.musicxml" -F "target=pdf" http://localhost:3000/api/convert && file out.pdf

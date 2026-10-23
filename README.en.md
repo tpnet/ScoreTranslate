@@ -2,7 +2,7 @@
 
 [简体中文](README.md) | English · [Website](https://tpnet.github.io/ScoreTranslate/)
 
-A local sheet-music format converter that runs as a web app: pick a score file, convert it to another format, download the result. Everything happens on your own machine — no file is ever uploaded to an external service.
+A React + Vite sheet-music converter for the web and Tauri desktop. Desktop conversion runs locally; the web version uses its companion server. Running that server locally keeps files on your machine.
 
 ## Conversion matrix
 
@@ -32,11 +32,22 @@ export MSCORE_PATH=/your/path/to/mscore
 bun install && bun run dev
 ```
 
-Then open http://localhost:3000 .
+Then open http://localhost:3000 . Vite serves the frontend and proxies `/api` to the Bun API on port 3001.
+
+Production:
+
+```bash
+bun run build
+bun run start
+```
+
+Bun serves both `dist/` and the API, listening on `127.0.0.1:3000` by default. Configure `HOSTNAME` / `PORT` and an HTTPS reverse proxy for remote deployment. MuseScore must be installed on the server; browser users do not need it. Hosting only `dist/` does not provide full conversion support.
 
 ## Desktop app
 
-The project can also be packaged as a macOS / Windows desktop app (Tauri, ~32MB installer on macOS). It ships its own runtime, so no bun is needed — just double-click. **MuseScore 4 still has to be installed separately**; without it only Guitar Pro → MusicXML / gp / gp5 works.
+The desktop app loads static assets and calls Rust through Tauri IPC. It bundles no Bun, Node.js or Next.js and starts no local HTTP server. The macOS arm64 DMG is approximately 2.5MB and the installed app approximately 4.9MB; Bun is not required.
+
+**MuseScore 4 must still be installed separately.** Without it, conversion between Guitar Pro / JSON / alphaTex and export to MusicXML remain available. Score processing runs in a Worker; Rust handles MuseScore and file operations. Long PNG export decodes one page at a time and retains the 100-million-pixel limit.
 
 Building requires the [Rust](https://rustup.rs) toolchain and only produces a package for the host platform:
 
@@ -47,6 +58,17 @@ bun install && bun tauri build
 Output goes to `src-tauri/target/release/bundle/` (`dmg/` on macOS, `nsis/` on Windows). The Windows package can also be built by manually running the `desktop` workflow in GitHub Actions. macOS 13 or later is required.
 
 The app is not signed with a paid certificate, so the OS blocks the first launch: on macOS go to System Settings → Privacy & Security and click "Open Anyway" (or run `xattr -dr com.apple.quarantine /Applications/ScoreTranslate.app`); on Windows click "More info → Run anyway" in the SmartScreen prompt.
+
+## Verification
+
+```bash
+bun run build            # TypeScript + Vite
+bun run verify           # Real HTTP conversions, requires MuseScore 4
+bun run verify --native  # Same cases through Rust; builds the native verification entry
+bun tauri dev            # Desktop development window
+```
+
+Checks cover all output formats, track selection, TAB, JSON/alphaTex, MIDI/MusicXML bridging, multipage PNG and long images, GP5 readback through two independent parsers, and invalid inputs. The conversion engine is not mocked.
 
 ## HTTP API
 
@@ -79,10 +101,14 @@ curl -F "file=@score.gp5" http://localhost:3000/api/tracks
 - `lib/convert.ts` — conversion core and routing; Guitar Pro input is parsed directly, everything else goes through a MusicXML bridge
 - `lib/gp5-writer.ts` — GP5 binary writer, including the string/fret assignment algorithm
 - `lib/gp-to-musicxml.ts` — Guitar Pro model → MusicXML serializer, preserving TAB staves and string/fret data
-- `app/api/convert/route.ts` — conversion endpoint: validation and file-stream response
-- `app/api/tracks/route.ts` — track-name listing endpoint, used by the UI's track picker
-- `app/page.tsx` — single-page UI for upload, target selection and download
-- `src-tauri/` — desktop shell: starts the Next.js standalone server with the bundled bun, then opens a window on it
+- `server/convert.ts` — conversion endpoint: validation and file-stream response
+- `server/tracks.ts` — track-name listing endpoint, used by the UI's track picker
+- `src/App.tsx` — single-page UI for upload, target selection and download
+- `src/convert.worker.ts` — desktop background processing using `lib/convert.ts`
+- `src/platform.ts` — web HTTP / desktop IPC entry
+- `server/render.ts` — web MuseScore and PNG adapter
+- `src-tauri/src/render.rs` — native MuseScore, temporary files, PNG/ZIP
+- `src-tauri/` — Tauri static frontend and native commands, without a server runtime
 
 ## License
 

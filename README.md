@@ -2,7 +2,7 @@
 
 简体中文 | [English](README.en.md) · [官网](https://tpnet.github.io/ScoreTranslate/)
 
-本地乐谱格式转换 Web 工具：选择乐谱文件，转换为其它格式并下载。全程在本机完成，文件不上传到任何外部服务。
+乐谱格式转换工具，使用 React + Vite，支持 Web 和 Tauri 桌面端。桌面版在本机完成转换；Web 版通过配套服务器转换，本机部署时文件不会上传到外部服务。
 
 ## 转换矩阵
 
@@ -32,11 +32,22 @@ export MSCORE_PATH=/your/path/to/mscore
 bun install && bun run dev
 ```
 
-打开 http://localhost:3000 。
+打开 http://localhost:3000 。开发模式由 Vite 提供页面，`/api` 代理到本机 3001 端口的 Bun API。
+
+生产部署：
+
+```bash
+bun run build
+bun run start
+```
+
+Bun 同时提供 `dist/` 静态页面和转换 API，默认只监听 `127.0.0.1:3000`。远程部署可配置 `HOSTNAME` / `PORT`，并在前面设置 HTTPS 反向代理。MuseScore 安装在服务器上，用户浏览器无需安装。仅部署 `dist/` 静态文件不能提供完整转换能力。
 
 ## 桌面版
 
-也可以打包成 macOS / Windows 桌面应用（Tauri，macOS 安装包约 32MB）：自带运行时，双击即用，不需要装 bun。**MuseScore 4 仍需单独安装**，没装时只有 Guitar Pro 转 MusicXML / gp / gp5 可用。
+桌面版直接加载静态页面，通过 Tauri IPC 调用 Rust，安装包不包含 Bun、Node.js 或 Next.js，也不启动本地 HTTP 服务。macOS arm64 DMG 约 2.5MB，安装后的 App 约 4.9MB，无需安装 Bun。
+
+**MuseScore 4 仍需单独安装**。没有 MuseScore 时，Guitar Pro / JSON / alphaTex 之间及转 MusicXML 仍可用。乐谱解析和写出在 Worker 执行，Rust 负责 MuseScore 与文件操作，PNG 长图逐页解码并保留 1 亿像素保护。
 
 构建需要 [Rust](https://rustup.rs) 工具链，只能构建本机平台的包：
 
@@ -47,6 +58,17 @@ bun install && bun tauri build
 产物在 `src-tauri/target/release/bundle/`（macOS 为 `dmg/`，Windows 为 `nsis/`）。Windows 包也可以在 GitHub Actions 里手动运行 `desktop` 工作流构建。macOS 要求 13 及以上。
 
 应用没有正式签名，首次打开会被系统拦截：macOS 到「系统设置 → 隐私与安全性」点「仍要打开」（或执行 `xattr -dr com.apple.quarantine /Applications/ScoreTranslate.app`）；Windows 在 SmartScreen 提示里点「更多信息 → 仍要运行」。
+
+## 校验
+
+```bash
+bun run build            # TypeScript + Vite
+bun run verify           # Web HTTP 真实文件转换（需要 MuseScore 4）
+bun run verify --native  # 同一组用例验证 Rust 转换路径，自动构建原生校验入口
+bun tauri dev            # 桌面开发窗口
+```
+
+校验覆盖全部输出格式、选轨、TAB、JSON/alphaTex、MIDI/MusicXML 桥接、多页 PNG 与长图、GP5 双解析器回读及错误输入；不使用 mock 转换引擎。
 
 ## HTTP 接口
 
@@ -79,10 +101,14 @@ curl -F "file=@score.gp5" http://localhost:3000/api/tracks
 - `lib/convert.ts` — 转换核心与路由；Guitar Pro 输入直接解析，其余先经 MusicXML 桥接
 - `lib/gp5-writer.ts` — GP5 二进制写出器（含弦品指派算法）
 - `lib/gp-to-musicxml.ts` — Guitar Pro 模型 → MusicXML 序列化器（保留 TAB 谱表与弦品信息）
-- `app/api/convert/route.ts` — 转换接口，负责校验与文件流响应
-- `app/api/tracks/route.ts` — 音轨名列表接口，供前端勾选导出哪些轨
-- `app/page.tsx` — 上传 / 选择目标格式 / 下载的单页界面
-- `src-tauri/` — 桌面版外壳：用随包的 bun 启动 Next.js standalone 服务，再开窗口加载
+- `server/convert.ts` — 转换接口，负责校验与文件流响应
+- `server/tracks.ts` — 音轨名列表接口，供前端勾选导出哪些轨
+- `src/App.tsx` — 上传 / 选择目标格式 / 下载的单页界面
+- `src/convert.worker.ts` — 桌面端后台转换，共用 `lib/convert.ts`
+- `src/platform.ts` — Web HTTP / 桌面 IPC 调用入口
+- `server/render.ts` — Web 端 MuseScore 与 PNG 适配
+- `src-tauri/src/render.rs` — 桌面端 MuseScore、临时文件、PNG/ZIP 实现
+- `src-tauri/` — Tauri 静态前端与原生命令，不包含服务端运行时
 
 ## 许可证
 
