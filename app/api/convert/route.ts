@@ -24,6 +24,8 @@ function parseOptions(form: FormData): ConvertOptions {
     return Number.isFinite(v) ? Math.min(max, Math.max(min, Math.round(v))) : undefined;
   };
   const opts: ConvertOptions = {
+    jsonTempo: num("jsonTempo", 20, 400),
+    jsonMiddleC: num("jsonMiddleC", 0, 120),
     dpi: num("dpi", 50, 1200),
     trim: num("trim", 0, 500),
     scale: num("scale", 50, 200),
@@ -61,7 +63,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "不支持的目标格式" }, { status: 400 });
   }
 
-  const baseName = file.name.replace(/\.[^.]+$/, "") || "score";
+  const baseName = file.name.replace(/\.gp\.json$|\.[^.]+$/i, "") || "score";
   try {
     const result = await convertScore(
       new Uint8Array(await file.arrayBuffer()),
