@@ -14,6 +14,10 @@ export interface ConvertResult {
 // 各目标格式的导出配置。所有字段可选，缺省即原有默认行为。
 // gp / gp5 / mscz 是全量结构转换，没有可配置项。
 export interface ConvertOptions {
+  /** 歌曲 JSON 的速度覆盖；二维 GP JSON 缺省为 120 BPM。 */
+  jsonTempo?: number;
+  /** 仅 LiberLive 原始 JSON 使用，默认 C4=60，保持源调高。 */
+  jsonMiddleC?: number;
   /** png / png-long：导出分辨率 DPI（png 默认 360，png-long 默认 150） */
   dpi?: number;
   /** png / png-long：裁剪四周白边并保留指定像素边距 */

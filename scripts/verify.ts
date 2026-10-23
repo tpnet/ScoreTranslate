@@ -43,7 +43,7 @@ async function convert(data: Uint8Array, name: string, target: OutputExt, option
   form.set("target", target);
   for (const [k,v] of Object.entries(options)) form.set(k,v);
   if (native) {
-    const result = await convertScore(data,name.split(".").pop()!,target,name.replace(/\.[^.]+$/,""),parseOptions(form),nativeRender);
+    const result = await convertScore(data,name.split(".").pop()!,target,name.replace(/\.gp\.json$|\.[^.]+$/i,""),parseOptions(form),nativeRender);
     return {bytes:result.data,filename:result.filename};
   }
   const response = await fetch(`${url}/api/convert`, { method: "POST", body: form });
@@ -122,6 +122,47 @@ try {
     const {bytes} = await convert(outputs.get(input)!,`score.${input}`,"gp5");
     assert.equal(load(bytes).tracks.length,2);
     passed(`${input} 输入回转 GP5`);
+  }
+  const timelinePath = path.resolve("scripts/fixtures/song-timeline.gp.json");
+  for (const source of ["song-timeline.gp.json", "lyrics-song.json"]) {
+    const input = new Uint8Array(await readFile(new URL(`./fixtures/${source}`, import.meta.url)));
+    const songForm = new FormData(); songForm.set("file",new File([input as BlobPart],source));
+    const names = await (await fetch(`${url}/api/tracks`,{method:"POST",body:songForm})).json();
+    assert.equal(names.tracks.length,2);
+    const options: Record<string,string> = source.endsWith(".gp.json") ? {jsonTempo:"89"} : {};
+    const song = await convert(input,source,"gp",options);
+    assert.equal(song.filename,`${source.replace(/\.gp\.json$|\.[^.]+$/i,"")}.gp`);
+    const parsed = load(song.bytes);
+    assert.equal(parsed.tempo,89); assert.equal(parsed.masterBars.length,2);
+    assert.equal(parsed.masterBars[0].section?.marker, source.endsWith(".gp.json") ? "Verse" : "Section 1");
+    if (source === "lyrics-song.json") {
+      assert.equal(parsed.title.replaceAll("\u00a0"," "),"歌曲 <&>");
+      assert.equal(parsed.artist,"作者");
+    } else {
+      assert.equal(load((await convert(input,source,"gp")).bytes).tempo,120);
+    }
+    const output = path.join(dir,`${source}.gp`);
+    await writeFile(output,song.bytes);
+    const check = Bun.spawn(["bun","scripts/verify-song-gp.ts",timelinePath,output],{stdout:"pipe",stderr:"pipe"});
+    const [out,error] = await Promise.all([new Response(check.stdout).text(),new Response(check.stderr).text()]);
+    assert.equal(await check.exited,0,`${out}\n${error}`);
+    for (const target of ["gp5","musicxml","pdf"] as const) {
+      const selected = await convert(input,source,target,{...options,tracks:"1"});
+      if (target !== "pdf") assert.equal(load(selected.bytes).tracks.length,1);
+      else assert.equal(new TextDecoder().decode(selected.bytes.slice(0,4)),"%PDF");
+    }
+    const overridden = load((await convert(input,source,"gp",{jsonTempo:"103",jsonMiddleC:"72"})).bytes);
+    assert.equal(overridden.tempo,103);
+    const firstPitch = (s: alphaTab.model.Score) => s.tracks[0].staves[0].bars[0].voices[0].beats[0].notes[0].realValue;
+    assert.equal(firstPitch(overridden),source.endsWith(".gp.json") ? firstPitch(parsed) : firstPitch(parsed)+12);
+    if (source === "lyrics-song.json") {
+      await assert.rejects(convert(input,source,"gp",{jsonMiddleC:"61"}),/八度基准/);
+    } else {
+      const crowded = JSON.parse(new TextDecoder().decode(input));
+      crowded[0][0].chord.tracks[0].midi_notes = Array.from({length:9},(_,i)=>({note:60+i,start_tick:0,end_tick:480}));
+      await assert.rejects(convert(new TextEncoder().encode(JSON.stringify(crowded)),source,"gp"),/无法无损导出 GP/);
+    }
+    passed(`${source} 音轨、BPM/八度、段落、歌词和弦、跨小节/重叠音符回读及选轨导出`);
   }
   for (const target of ["gp","gp5","json","atex","musicxml","pdf"] as const) {
     const {bytes} = await convert(fixture,"bridge.musicxml",target,{tracks:"1",staffMode:"tab"});

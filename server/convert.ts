@@ -20,7 +20,7 @@ export async function POST(req: Request) {
     return Response.json({ error: "不支持的目标格式" }, { status: 400 });
   }
 
-  const baseName = file.name.replace(/\.[^.]+$/, "") || "score";
+  const baseName = file.name.replace(/\.gp\.json$|\.[^.]+$/i, "") || "score";
   try {
     const result = await convertScore(
       new Uint8Array(await file.arrayBuffer()),

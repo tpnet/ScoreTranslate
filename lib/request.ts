@@ -16,6 +16,8 @@ export function parseOptions(form: FormData): ConvertOptions {
     return Number.isFinite(v) ? Math.min(max, Math.max(min, Math.round(v))) : undefined;
   };
   const opts: ConvertOptions = {
+    jsonTempo: num("jsonTempo", 20, 400),
+    jsonMiddleC: num("jsonMiddleC", 0, 120),
     dpi: num("dpi", 50, 1200),
     trim: num("trim", 0, 500),
     scale: num("scale", 50, 200),

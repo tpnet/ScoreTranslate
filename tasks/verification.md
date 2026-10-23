@@ -47,3 +47,15 @@ Web 38 组、Rust 39 组真实文件回归，覆盖全部 12 个输出目标、�
 - 没有承诺转换耗时的固定提升比例，未做超大乐谱的峰值内存基准。性能改动是移除服务端启动、后台 Worker 计算、二进制 IPC 与原生长图逐页解码。
 - MuseScore 仍需另外安装。应用使用 ad-hoc 签名，未进行正式开发者签名或公证。
 - 未新增 JVM/单元测试；新增的是实际文件端到端校验脚本与原生校验入口。
+
+## main 新增歌曲 JSON 功能迁移（2026-10-23）
+
+- 来源：`origin/main` 的 `4f75adf`（功能提交 `27c79b8`）。`lib/song-json.ts` 和 `scripts/verify-song-gp.ts` 与 main 原文件一致，沿用现有输入适配与回读逻辑。
+- 将输入适配接入共用 `lib/convert.ts`，BPM/八度配置移入 `lib/formats.ts` 和 `lib/request.ts`，React 控件复用同一入口。Web API、桌面 Worker 与校验脚本统一剥离 `.gp.json` 双后缀。
+- `bun run build`、Web 40 组、Rust 41 组真实文件回归、`bun tauri build --bundles app,dmg` 通过。新增固定双轨 JSON 样本验证标题/作者、自动及覆盖 BPM、原始谱八度、时间线不移调、跨小节连音、重叠长音、歌词、和弦、段落、调弦弦品，以及选轨导出 GP5/MusicXML/PDF。
+- 非法八度与九音同时发声时明确报错；不允许静默移调或丢音。保留旧 alphaTab JSON 导入，并为无效 JSON 保持可读的错误提示。
+- Web 窗口实际上传 GP 时间线，下载 `song-timeline.gp`，回读确认 89 BPM、两轨、两小节。
+- 桌面实际上传 LiberLive 原始 JSON，设置 103 BPM 与 C5，下载 `lyrics-song.gp`，回读确认速度 103、第一音 MIDI 72、两轨。
+- 最新 arm64 DMG：2,524,124 字节（2.524 MB）；App 文件合计 4,880,757 字节。
+
+未在本机找到《普通朋友》原始详情/时间线，未重复 main 记录的 957 音符全曲校验；本次使用固定双轨样本。未进行 Guitar Pro 桌面端人工试听或 Windows 实机验证。
