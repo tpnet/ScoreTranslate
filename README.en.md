@@ -45,7 +45,7 @@ Download the appropriate file from [Releases](https://github.com/tpnet/ScoreTran
 | macOS Apple Silicon / Intel | DMG for the appropriate architecture; macOS 13 or later |
 | Windows x64 | `ScoreTranslate_<version>_x64-setup.exe` installer or `ScoreTranslate_<version>_x64-portable.exe`; the portable app requires an installed WebView2 Runtime |
 
-The desktop app needs neither Bun nor Node.js and starts no local HTTP server. **Install MuseScore 4 separately.** Without it, conversion between Guitar Pro / JSON / alphaTex and export to MusicXML still work; other conversions require MuseScore.
+The desktop app needs neither Bun nor Node.js and starts no local HTTP server. **Install MuseScore 4 separately when needed.** Conversions between Guitar Pro / MusicXML / JSON / alphaTex and track listing work without it. MIDI input and MIDI / PDF / PNG / MSCZ output require MuseScore.
 
 The app has no formal developer signing or notarization. If the OS blocks the first launch:
 
@@ -131,7 +131,7 @@ Optional form fields apply only to the relevant inputs or targets:
 | `trim` | 0–500 | Pixel margin retained after trimming PNG whitespace |
 | `paper` | `a4` / `letter` | PDF paper size; uses the source setting by default |
 | `scale` | 50–200 | PDF score scaling percentage; 100 is the original size |
-| `staffMode` | `tab` / `standard` | Tablature or standard notation for MusicXML / PDF / PNG; PDF / PNG use the original layout by default, while Guitar Pro family inputs default to tablature for MusicXML |
+| `staffMode` | `tab` / `standard` | Tablature or standard notation for MusicXML / PDF / PNG; PDF / PNG use the original layout by default, while Guitar Pro / JSON / alphaTex inputs default to tablature for MusicXML; MusicXML family inputs preserve the original layout by default |
 | `unrollRepeats` | `1` | Unroll MIDI repeats |
 | `mergeLyrics` | `1` | Merge lyrics for GP / GP5 / MusicXML / PDF / PNG |
 | `jsonTempo` | 20–400 | Override song JSON BPM |
@@ -167,7 +167,7 @@ Desktop builds require [Rust](https://rustup.rs) and the platform's Tauri build 
 
 The `desktop` GitHub Actions workflow supports manual builds for macOS Apple Silicon, macOS Intel and Windows x64. Publishing a Release automatically builds and uploads installers and the Windows portable app. Manual runs only save Actions artifacts. Synchronize project version numbers before publishing and use a matching `v<version>` Release tag.
 
-Regression checks cover all output formats, track selection, TAB, song JSON / alphaTab JSON / alphaTex, MIDI / MusicXML bridging, multipage PNG and long images, GP5 readback through two independent parsers, and invalid inputs. They use real files and MuseScore, with no mocked conversion engine.
+Regression checks cover all output formats, track selection, song JSON / alphaTab JSON / alphaTex, direct MusicXML conversion and original XML preservation, MIDI bridging, multipage PNG and long images, GP5 readback through two independent parsers, and invalid inputs. TAB → standard notation → TAB readback covers four, six and seven strings, custom tuning, capos and combined staves, with pitch checks through alphaTab and MuseScore. Direct conversion paths assert that MuseScore is never called. Checks use real files and conversion engines.
 
 After converting a two-dimensional GP timeline to GP, run the dedicated readback check to compare pitches, start/end ticks, lyrics, chords, tuning and string/fret data. Leave track selection and lyric merging disabled when checking the complete score:
 
@@ -190,7 +190,9 @@ bun scripts/verify-song-gp.ts /path/to/source.gp.json /path/to/output.gp
 | `src-tauri/` | Static frontend packaging, Rust commands and MuseScore / PNG / ZIP adapter |
 | `scripts/` | Development launcher and real-file verification |
 
-Guitar Pro family inputs (JSON / alphaTex are first converted to GP) are parsed directly by alphaTab. MusicXML export uses a custom serializer to retain TAB, tunings and string/fret data. Other conversions use MuseScore 4 for parsing or rendering; non-GP inputs are bridged through MusicXML before GP / GP5 / alphaTex export.
+Guitar Pro and MusicXML family inputs are parsed directly by alphaTab. Track listing and GP / GP5 / JSON / alphaTex export do not call MuseScore. JSON / alphaTex to MusicXML / XML / MXL reuses the parsed Score, removing the intermediate GP export and reimport; other targets retain the GP path.
+
+Conversions between MusicXML / XML / MXL preserve the original XML bytes when track selection, lyric merging and staff mode are unset, only copying, packing or unpacking the file. Requested edits use the score model and custom serializer. TAB staves retain tuning and string/fret data; standard notation writes sounding pitches. MIDI input is bridged through MusicXML by MuseScore; MIDI / PDF / PNG / MSCZ output still uses MuseScore.
 
 When PDF uses the original staff layout and MuseScore cannot render Guitar Pro directly, conversion retries through MusicXML, preserving standard notation / tablature visibility. On desktop, the shared core runs in a Worker, while Rust handles MuseScore and file operations.
 
@@ -198,6 +200,7 @@ When PDF uses the original staff layout and MuseScore cannot render Guitar Pro d
 
 - **Legacy formats are input-only:** `.gp3` / `.gp4` / `.gpx` cannot be exported. `.gp` output is GP7/8; `.gp5` output is GP5 v5.00.
 - **GP5 has format and encoding limits:** the custom writer preserves notes, rhythms, ties, tuplets, dynamics, time/key signatures, repeats, tuning, capo position, and techniques including bends, hammer-ons/pull-offs, slides, harmonics, palm mutes and vibrato. Chord diagrams are not retained; effects GP5 cannot express are downgraded or skipped. Non-ASCII titles, lyrics and other text become `?`; use MusicXML / PDF / PNG for Chinese lyrics. MIDI or piano MusicXML exported to GP5 receives automatic tuning and string/fret assignments; out-of-range notes may be folded by octaves. The song JSON path instead fails if pitches would change.
+- **Standard notation does not retain TAB positions:** standard-only output omits string/fret fields that depend on TAB tuning, preventing incorrect pitches on reimport. Converting back to TAB assigns positions from pitch, which may differ from the original fingering. Choose TAB or preserve an original layout containing TAB to retain tuning, capo and positions.
 - **MIDI and recognized scores need manual correction:** MIDI lacks voice, tie and accidental-spelling information, so MuseScore infers notation through quantization. Performance recordings and recognized drafts still need checking against the original score.
 - **Song JSON playback across apps still needs confirmation:** alphaTab readback of the historical “普通朋友” sample retained all 957 notes' pitches and start/end times, but MuseScore 4 split one tied note near the end into two attacks. Playback and ties have not been manually checked in the Guitar Pro desktop app.
 

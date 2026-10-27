@@ -165,7 +165,7 @@
           <a class="button" href="https://github.com/tpnet/ScoreTranslate/releases"><span class="zh">下载桌面版</span><span class="en">Download desktop</span><span aria-hidden="true">↗</span></a>
           <a class="button secondary" href="#start"><span class="zh">自行部署 Web 版</span><span class="en">Run the web app</span><span aria-hidden="true">↓</span></a>
         </div>
-        <p class="small hero-note"><span class="zh">macOS / Windows · 免费开源 · MuseScore 4 需另装</span><span class="en">macOS / Windows · Free &amp; open source · MuseScore 4 installed separately</span></p>
+        <p class="small hero-note"><span class="zh">macOS / Windows · 免费开源 · PDF / PNG / MIDI 需另装 MuseScore 4</span><span class="en">macOS / Windows · Free &amp; open source · PDF / PNG / MIDI require MuseScore 4</span></p>
       </div>
       <figure class="score-visual">
         <div class="visual-label"><span>01 / SCORE IN</span><span>02 / FORMAT OUT</span></div>
@@ -208,7 +208,7 @@
     <section id="features" aria-labelledby="features-title">
       <div class="section-heading"><div><p class="eyebrow">02 / The details matter</p><h2 id="features-title"><span class="zh">不只是换一个扩展名。</span><span class="en">More than a new extension.</span></h2></div></div>
       <div class="tools">
-        <article class="tool"><p class="tool-number">01 — NOTATION</p><h3><span class="zh">让六线谱保持完整</span><span class="en">Keep the tablature</span></h3><p><span class="zh">Guitar Pro 转 MusicXML 保留 TAB、调弦与每个音的弦号品位。MusicXML、PDF、PNG 可选择六线谱或五线谱。</span><span class="en">Guitar Pro to MusicXML retains TAB staves, tuning and each note's string/fret data. Choose tablature or standard notation for MusicXML, PDF and PNG.</span></p></article>
+        <article class="tool"><p class="tool-number">01 — NOTATION</p><h3><span class="zh">让六线谱保持完整</span><span class="en">Keep the tablature</span></h3><p><span class="zh">Guitar Pro 转 MusicXML 保留 TAB、调弦与每个音的弦号品位。MusicXML、PDF、PNG 可选择六线谱或五线谱。纯五线谱保留音高，转回 TAB 时重新分配弦品。</span><span class="en">Guitar Pro to MusicXML retains TAB staves, tuning and each note's string/fret data. Choose tablature or standard notation for MusicXML, PDF and PNG. Standard notation preserves pitch; converting back to TAB reassigns string/fret positions.</span></p></article>
         <article class="tool"><p class="tool-number">02 — ARRANGEMENT</p><h3><span class="zh">只留下需要的声部</span><span class="en">Choose the parts you need</span></h3><p><span class="zh">所有输出格式均支持选轨。制作弹唱谱时，可把人声歌词按时间并入吉他等音轨，方便边弹边唱。</span><span class="en">Select tracks for any output format. For lead sheets, align vocal lyrics with the guitar and other parts.</span></p></article>
         <article class="tool"><p class="tool-number">03 — EXPORT</p><h3><span class="zh">为打印与分享准备好</span><span class="en">Ready to print or share</span></h3><p><span class="zh">PDF 可调纸张与缩放，PNG 可调 DPI 与裁边。多页图片自动打包 ZIP，也可纵向拼成长图。</span><span class="en">Set PDF paper size and scale, or PNG resolution and margins. Multipage images arrive as a ZIP or one long vertical image.</span></p></article>
       </div>
@@ -227,7 +227,7 @@ cd ScoreTranslate
 bun install
 bun run dev</code></pre><p class="small"><span class="zh">打开 <a href="http://localhost:3000">localhost:3000</a>。Web 文件由部署服务器处理；本机部署时文件留在本机。</span><span class="en">Open <a href="http://localhost:3000">localhost:3000</a>. Files are processed by your server; hosting locally keeps them on your machine.</span></p><a class="text-link doc-link" href="https://github.com/tpnet/ScoreTranslate/blob/main/README.md"><span class="zh">部署说明与 HTTP 接口 ↗</span><span class="en">Deployment &amp; HTTP API docs ↗</span></a></article>
       </div>
-      <div class="engine-note"><strong>MuseScore 4 + alphaTab</strong><p><span class="zh">MuseScore 4 需<a href="https://musescore.org">单独安装</a>。未安装时，Guitar Pro / JSON / alphaTex 之间互转及导出 MusicXML 仍可用；PDF、PNG、MIDI 等转换需要它。非默认安装路径可用 <code>MSCORE_PATH</code> 指定。</span><span class="en">Install <a href="https://musescore.org">MuseScore 4 separately</a>. Without it, Guitar Pro / JSON / alphaTex conversions and MusicXML export still work. PDF, PNG, MIDI and other conversions require it. Set <code>MSCORE_PATH</code> for a custom install location.</span></p></div>
+      <div class="engine-note"><strong>MuseScore 4 + alphaTab</strong><p><span class="zh">MuseScore 4 需<a href="https://musescore.org">单独安装</a>。未安装时，Guitar Pro / MusicXML / JSON / alphaTex 之间互转和读取音轨仍可用；MIDI 输入及 MIDI / PDF / PNG / MSCZ 输出需要它。非默认安装路径可用 <code>MSCORE_PATH</code> 指定。</span><span class="en">Install <a href="https://musescore.org">MuseScore 4 separately</a>. Without it, Guitar Pro / MusicXML / JSON / alphaTex conversions and track listing still work. MIDI input and MIDI / PDF / PNG / MSCZ output require it. Set <code>MSCORE_PATH</code> for a custom install location.</span></p></div>
     </section>
 
     <section class="faq" aria-labelledby="faq-title">

@@ -30,16 +30,19 @@ bun tauri build         # 静态资源 + Rust 打包，产物在 src-tauri/targe
 
 ## 转换链路
 
-分两条路径：
+主要转换路径：
 
-- **gp 系输入（gp/gpx/gp3/gp4/gp5；alphaTab JSON 和 alphaTex 先转成 `.gp` 再走这条）→ MusicXML 系 / gp / gp5 / json / atex**：alphaTab 直接解析原文件，不经过 MuseScore。MusicXML 由 `gp-to-musicxml.ts` 自研序列化——因为 MuseScore 的 MusicXML 导出会丢掉 TAB 谱表、调弦和全部弦/品信息。写 MusicXML 时**用实际发声音高、不写 `<transpose>` 八度声明**：MuseScore 4 导入时忽略该声明，按吉他记谱惯例写高八度会导致品位整体上移 12 品（曾实测踩坑）。
-- **其余转换**：MuseScore 4 CLI 负责解析和导出（mid/pdf/png/mscz 及非 gp 输入）。非 gp 输入转 `.gp` / `.gp5` / `.atex` 走两段：MuseScore 先转 MusicXML，`.gp` 由 alphaTab 的 `Gp7Exporter` 写出，`.gp5` 由自研写出器写出，`.atex` 由 alphaTab 的 `AlphaTexExporter` 写出。
+- **gp 系输入（gp/gpx/gp3/gp4/gp5）→ MusicXML 系 / gp / gp5 / json / atex**：alphaTab 直接解析原文件，不经过 MuseScore。JSON（含歌曲 JSON）和 alphaTex 转 MusicXML/xml/mxl 直接复用解析得到的 Score，其余目标先转 `.gp` 再走 GP 链路。MusicXML 由 `gp-to-musicxml.ts` 自研序列化——因为 MuseScore 的 MusicXML 导出会丢掉 TAB 谱表、调弦和全部弦/品信息。写 MusicXML 时**用实际发声音高、不写 `<transpose>` 八度声明**：MuseScore 4 导入时忽略该声明，按吉他记谱惯例写高八度会导致品位整体上移 12 品（曾实测踩坑）。
+- **MusicXML 系输入（musicxml/xml/mxl）**：音轨列表和 gp/gp5/json/atex 导出直接由 alphaTab 解析。XML 系无选项互转保留原始 XML 字节，只复制或打包、解包；选轨、合并歌词或指定谱表类型时再用自研序列化器写出。
+- **其余转换**：mid/pdf/png/mscz 目标仍由 MuseScore 4 CLI 导出。MIDI 输入需先由 MuseScore 桥接成 MusicXML，才交 alphaTab 处理选轨或 GP 系导出；MusicXML 系输入直接解析，省去该桥接。
 
 歌曲 JSON（LL 原始详情与二维 GP 时间线）先由 `songJsonToXml` 生成 MusicXML，再直接交 alphaTab 解析，首次 GP 序列化前必须补齐调弦与弦品，并校验音高未改变、音符未丢失。`jsonTempo` 在两种歌曲 JSON 上覆盖 BPM；`jsonMiddleC` 仅影响原始详情，二维时间线已有 MIDI 音高不可再次移调。Web 和桌面 Worker 的 `.gp.json` 输入命名均应剥掉双后缀。修改此路径时，运行 `scripts/verify-song-gp.ts` 回读检查音高、起止 tick、歌词、和弦与调弦。
 
-导出配置见 `ConvertOptions`（lib/formats.ts）：png 的 DPI/裁边走 `-r`/`-T`，pdf 的纸张/缩放走 `-S` 临时样式文件，mid 展开反复走 `--unroll-repeats`，MusicXML/pdf/png 目标的谱表类型（TAB/五线谱）由自研序列化器处理：gp 输入直接解析；非 gp 输入选 TAB 时先由 MuseScore 桥接成 MusicXML、`ensureFingerings` 指派弦品后重新序列化；pdf/png 最后交回 MuseScore 渲染。这些是 MuseScore CLI 仅有的相关开关，别的"配置项"CLI 不支持，gp/gp5/mscz 转换本身无参数。
+导出配置见 `ConvertOptions`（lib/formats.ts）：png 的 DPI/裁边走 `-r`/`-T`，pdf 的纸张/缩放走 `-S` 临时样式文件，mid 展开反复走 `--unroll-repeats`，MusicXML/pdf/png 目标的谱表类型（TAB/五线谱）由自研序列化器处理：GP / MusicXML 系输入直接解析；MIDI 输入选 TAB 时先由 MuseScore 桥接成 MusicXML，再由 `ensureFingerings` 指派弦品并重新序列化；pdf/png 最后交回 MuseScore 渲染。这些是 MuseScore CLI 仅有的相关开关，别的"配置项"CLI 不支持，gp/gp5/mscz 转换本身无参数。
 
-`tracks`（只导出选中音轨，对全部目标格式生效）统一在 alphaTab 模型上过滤，下标由 `listTracks` 给出——它和转换走同一条解析链路（gp 系 alphaTab 直连，其余先经 MuseScore 桥接成 MusicXML），下标才对得上。因此 pdf/png/mid/mscz 这些本来直接丢给 MuseScore 的目标，在选轨时被迫先过一遍 alphaTab：gp 输入指定了谱表类型走自研 MusicXML 序列化，未指定则重新导出只含选中轨的 `.gp` 交回 MuseScore，避免改变"跟随原谱"的渲染；非 gp 输入一律 MuseScore 桥接成 MusicXML 后重新序列化。**gp/gp5/json/atex 目标必须排除在这段桥接之外**——它们下面有自己的桥接，过两遍会按已过滤后的下标再过滤一次。过滤不重排 `track.index`——`gp-to-musicxml.ts` 用它拼 part id。atex 目标是例外：`AlphaTexExporter` 只在 `index === 0` 的音轨上写小节级信息（拍号、调号、速度、反复、段落），滤掉首轨会全部静默丢失，所以导出前由 `reindexTracks` 重排 index，并同步改键按 index 索引的 stylesheet 逐轨设置。
+`tracks`（只导出选中音轨，对全部目标格式生效）统一在 alphaTab 模型上过滤，下标由 `listTracks` 给出——它和转换走同一条解析链路（GP / MusicXML / JSON / alphaTex 由 alphaTab 直接解析，MIDI 先经 MuseScore 桥接成 MusicXML），下标才对得上。因此 pdf/png/mid/mscz 这些本来直接丢给 MuseScore 的目标，在选轨时被迫先过一遍 alphaTab：gp 输入指定了谱表类型走自研 MusicXML 序列化，未指定则重新导出只含选中轨的 `.gp` 交回 MuseScore，避免改变"跟随原谱"的渲染；MusicXML 系输入直接解析后重新序列化，MIDI 输入先由 MuseScore 桥接成 MusicXML。**gp/gp5/json/atex 目标必须排除在这段桥接之外**——它们下面有自己的桥接，过两遍会按已过滤后的下标再过滤一次。过滤不重排 `track.index`——`gp-to-musicxml.ts` 用它拼 part id。atex 目标是例外：`AlphaTexExporter` 只在 `index === 0` 的音轨上写小节级信息（拍号、调号、速度、反复、段落），滤掉首轨会全部静默丢失，所以导出前由 `reindexTracks` 重排 index，并同步改键按 index 索引的 stylesheet 逐轨设置。
+
+纯五线谱不写 `<technical>` 中的 `string/fret`：没有 TAB 调弦时 alphaTab 会把品数当音高。TAB 和双谱表的 TAB 部分保留完整调弦与弦品；五线谱转回 TAB 会重新指派把位。
 
 和弦：MuseScore 读 .gp 时把和弦 ID 当数字解析，而 alphaTex 来源的 ID 是 `c00`、gp5 来源的是 GUID，会全被解析成 0，所有和弦都显示成第一个——所以 alphaTab 写 .gp 或 MusicXML 前一律先过 `normalizeChordIds` 重排成数字。MusicXML 的 `<harmony>` 把和弦名后缀原样放进 `kind` 的 `text`（MuseScore、alphaTab 都按它显示）；空后缀必须写 `major`，写 `other` 会被 MuseScore 显示成 "C°ther"。
 

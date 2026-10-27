@@ -107,7 +107,7 @@ function beatTicks(beat: model.Beat): number {
 function noteXml(
   note: model.Note,
   beat: model.Beat,
-  opts: { isChord: boolean; stringed: boolean; stringCount: number; useFlats: boolean; voice: number; ticks: number; staffNumber?: number },
+  opts: { isChord: boolean; stringed: boolean; tabStaff: boolean; stringCount: number; useFlats: boolean; voice: number; ticks: number; staffNumber?: number },
 ): string {
   const { isChord, stringed, stringCount, useFlats, voice, ticks } = opts;
   const grace = (beat.graceType as number) !== 0;
@@ -155,7 +155,8 @@ function noteXml(
   const first = !isChord; // beat 级技巧只写在和弦首音上，避免重复
 
   const tech: string[] = [];
-  if (stringed && note.string >= 1 && note.fret >= 0) {
+  // 纯五线谱没有 TAB 调弦；写弦品会让 alphaTab 忽略 pitch、把品数当成音高。
+  if (opts.tabStaff && stringed && note.string >= 1 && note.fret >= 0) {
     // MusicXML 的 1 弦是最高音弦，alphaTab 的 1 弦是最低音弦，需换算
     tech.push(`<string>${stringCount - note.string + 1}</string><fret>${note.fret}</fret>`);
   }
@@ -374,6 +375,7 @@ function measureXml(
           xml += noteXml(n, beat, {
             isChord: ni > 0,
             stringed,
+            tabStaff: tabStaff || staffNumber === 2,
             stringCount,
             useFlats,
             voice,

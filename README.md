@@ -45,7 +45,7 @@ PNG 单页返回图片，多页自动打包为 ZIP；PNG 长图将各页纵向�
 | macOS Apple Silicon / Intel | 对应架构的 DMG，macOS 13 及以上 |
 | Windows x64 | `ScoreTranslate_<版本>_x64-setup.exe` 安装版，或 `ScoreTranslate_<版本>_x64-portable.exe` 免安装版；免安装版需系统已有 WebView2 Runtime |
 
-桌面版无需安装 Bun 或 Node.js，也不启动本地 HTTP 服务。**MuseScore 4 需单独安装**；未安装时，Guitar Pro / JSON / alphaTex 之间互转及导出 MusicXML 仍可用，其余转换需要 MuseScore。
+桌面版无需安装 Bun 或 Node.js，也不启动本地 HTTP 服务。**MuseScore 4 按转换需求单独安装**。未安装时，Guitar Pro / MusicXML / JSON / alphaTex 之间互转和读取音轨仍可用；MIDI 输入，以及 MIDI / PDF / PNG / MSCZ 输出需要 MuseScore。
 
 应用未做正式开发者签名与公证。首次打开如被系统拦截：
 
@@ -131,7 +131,7 @@ curl -f -O -J \
 | `trim` | 0–500 | PNG 裁边后保留的像素边距 |
 | `paper` | `a4` / `letter` | PDF 纸张大小；缺省沿用原谱 |
 | `scale` | 50–200 | PDF 谱面缩放百分比；100 为原始大小 |
-| `staffMode` | `tab` / `standard` | MusicXML / PDF / PNG 的六线谱或五线谱；PDF / PNG 缺省跟随原谱，Guitar Pro 系输入转 MusicXML 缺省为六线谱 |
+| `staffMode` | `tab` / `standard` | MusicXML / PDF / PNG 的六线谱或五线谱；PDF / PNG 缺省跟随原谱，Guitar Pro / JSON / alphaTex 输入转 MusicXML 缺省为六线谱，MusicXML 系输入缺省保留原谱 |
 | `unrollRepeats` | `1` | MIDI 展开反复 |
 | `mergeLyrics` | `1` | GP / GP5 / MusicXML / PDF / PNG 歌词并轨 |
 | `jsonTempo` | 20–400 | 覆盖歌曲 JSON 的 BPM |
@@ -167,7 +167,7 @@ bun tauri build          # 构建当前平台桌面包，需要 Rust 工具链
 
 `desktop` GitHub Actions 工作流支持手动构建 macOS Apple Silicon、macOS Intel 和 Windows x64 产物；发布 Release 时自动构建并上传安装包及 Windows 免安装版。手动运行只保存 Actions 产物。发布前同步更新项目版本号，Release 标签使用对应的 `v<版本>`。
 
-回归覆盖全部输出格式、选轨、TAB、歌曲 JSON / alphaTab JSON / alphaTex、MIDI / MusicXML 桥接、多页 PNG 与长图、GP5 双解析器回读及错误输入，使用真实文件与 MuseScore，无 mock 转换引擎。
+回归覆盖全部输出格式、选轨、歌曲 JSON / alphaTab JSON / alphaTex、MusicXML 直连与原文互转、MIDI 桥接、多页 PNG 与长图、GP5 双解析器回读及错误输入。TAB → 五线谱 → TAB 回读覆盖四/六/七弦、特殊调弦、变调夹和双谱表，并核对 alphaTab 与 MuseScore 读取的音高；直连路径断言不调用 MuseScore。使用真实文件与转换引擎。
 
 二维 GP 时间线转 GP 后，还可运行专项回读，比较音高、起止 tick、歌词、和弦及调弦弦品；检查完整音轨时不要启用选轨或歌词并轨：
 
@@ -190,7 +190,9 @@ bun scripts/verify-song-gp.ts /path/to/source.gp.json /path/to/output.gp
 | `src-tauri/` | 静态前端打包、Rust 原生命令与 MuseScore / PNG / ZIP 适配 |
 | `scripts/` | 开发启动与真实文件校验 |
 
-Guitar Pro 系输入（JSON / alphaTex 先转为 GP）通过 alphaTab 直接解析，转 MusicXML 时使用自研序列化器保留 TAB、调弦和弦品。其余转换由 MuseScore 4 解析或渲染；非 GP 输入导出 GP / GP5 / alphaTex 时先桥接为 MusicXML。
+Guitar Pro 与 MusicXML 系输入通过 alphaTab 直接解析，读取音轨和导出 GP / GP5 / JSON / alphaTex 不经过 MuseScore。JSON / alphaTex 转 MusicXML / XML / MXL 直接复用解析后的 Score，省去中间 GP 写出与回读；其余目标沿用 GP 链路。
+
+MusicXML / XML / MXL 之间互转时，若未选轨、未开启歌词并轨且未指定谱表类型，保留原始 XML 字节，只复制或打包、解包；需要修改时再经过模型与自研序列化器。TAB 谱表保留调弦和弦品，纯五线谱以实际音高写出。MIDI 输入先由 MuseScore 桥接为 MusicXML；MIDI / PDF / PNG / MSCZ 目标仍由 MuseScore 导出。
 
 PDF 选择「跟随原谱」时，若 MuseScore 无法直接从 Guitar Pro 生成 PDF，会经 MusicXML 重试，保留原谱五线谱 / 六线谱显示设置。桌面版在 Worker 中执行共用核心，Rust 负责 MuseScore 与文件操作。
 
@@ -198,6 +200,7 @@ PDF 选择「跟随原谱」时，若 MuseScore 无法直接从 Guitar Pro 生�
 
 - **旧格式只读**：`.gp3` / `.gp4` / `.gpx` 仅支持输入；`.gp` 输出为 GP7/8，`.gp5` 输出为 GP5 v5.00。
 - **GP5 有格式与编码限制**：自研写出器保留音符、节奏、连音线、连音、力度、拍号调号、反复、调弦、变调夹及推弦、击勾弦、滑音、泛音、闷音、颤音等演奏效果；不保留和弦图，GP5 无法表达的效果会降级或跳过。非 ASCII 标题、歌词等文本降级为 `?`，中文歌词建议导出 MusicXML / PDF / PNG。MIDI 或钢琴 MusicXML 转 GP5 时会自动选择调弦并指派弦品，超出音域的音符可能按八度折叠；歌曲 JSON 路径会在音高改变时直接报错。
+- **纯五线谱不保留 TAB 把位**：五线谱输出不写依赖 TAB 调弦的弦号和品位，避免再次回读时误算音高。转回 TAB 会按音高重新指派弦品，可能与原把位不同；需要保留原调弦、变调夹和把位时选择 TAB 或跟随原谱保留 TAB。
 - **MIDI 与识别谱需要人工校正**：MIDI 不携带声部、连音线、临时记号拼写等谱面信息，MuseScore 需通过量化推断；演奏录制的 MIDI、自动识别草稿中的时值与记谱仍需对照原谱整理。
 - **歌曲 JSON 的跨软件播放仍需确认**：历史样本《普通朋友》的 alphaTab 回读保留了全部 957 个音符的音高与起止时间，但 MuseScore 4 回读时会将结尾一处连音长音拆成两次起音。Guitar Pro 桌面端的实际发声与连音效果尚未人工试听确认。
 

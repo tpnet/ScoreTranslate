@@ -30,7 +30,7 @@ export interface ConvertOptions {
   scale?: number;
   /**
    * MusicXML / pdf / png 目标的谱表类型：六线谱或标准五线谱。
-   * 缺省时 gp 输入转 MusicXML 为 tab，其余走 MuseScore 原生行为；
+   * 缺省时 GP / JSON / alphaTex 输入转 MusicXML 为 tab，MusicXML 系保持原谱；
    * 非 gp 来源选 tab 会自动推断调弦并指派弦品
    */
   staffMode?: "tab" | "standard";
