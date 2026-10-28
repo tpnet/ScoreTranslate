@@ -12,7 +12,7 @@
 
 | 类型 | 输入 | 输出 |
 | --- | --- | --- |
-| Guitar Pro | `.gp` `.gpx` `.gp3` `.gp4` `.gp5` | `.gp`（GP7/8） `.gp5`（GP5 v5.00） |
+| Guitar Pro | `.gp` `.gpx` `.gp3` `.gp4` `.gp5` | `.gp`（GP7/8） `.gpx`（GP6） `.gp5`（GP5 v5.00） |
 | MusicXML | `.musicxml` `.xml` `.mxl` | `.musicxml` `.xml` `.mxl` |
 | MIDI | `.mid` `.midi` | `.mid` |
 | JSON | LL 原始歌曲详情、二维 GP 时间线、alphaTab 乐谱模型 | alphaTab 乐谱模型 `.json` |
@@ -30,7 +30,7 @@
 | PDF | 纸张大小、谱面缩放；谱表类型也可跟随原谱 |
 | PNG / PNG 长图 | DPI、裁边；谱表类型也可跟随原谱 |
 | MIDI | 展开反复记号 |
-| GP / GP5 / MusicXML / PDF / PNG | 歌词并轨，将人声轨歌词按时间对齐到其他音轨 |
+| GP / GPX / GP5 / MusicXML / PDF / PNG | 歌词并轨，将人声轨歌词按时间对齐到其他音轨 |
 
 PNG 单页返回图片，多页自动打包为 ZIP；PNG 长图将各页纵向拼接，超过 **1 亿像素**时会报错，可降低 DPI 后重试。
 
@@ -114,7 +114,7 @@ export MSCORE_PATH="/your/path/to/mscore"
 
 ## 歌曲 JSON 转 Guitar Pro
 
-上传歌曲 JSON，目标选择 **Guitar Pro (.gp)**，即可生成 GP7/8 文件。支持两种歌曲输入：
+上传歌曲 JSON，目标选择 **Guitar Pro (.gp)** 生成 GP7/8 文件，或选择 **Guitar Pro 6 (.gpx)** 生成 GP6 文件。支持两种歌曲输入：
 
 | 输入 | 元数据与速度 | 音高设置 |
 | --- | --- | --- |
@@ -142,7 +142,7 @@ curl -f -O -J \
   http://localhost:3000/api/convert
 ```
 
-`target` 可选值：`mid`、`musicxml`、`xml`、`mxl`、`gp`、`gp5`、`json`、`atex`、`mscz`、`pdf`、`png`、`png-long`。
+`target` 可选值：`mid`、`musicxml`、`xml`、`mxl`、`gp`、`gpx`、`gp5`、`json`、`atex`、`mscz`、`pdf`、`png`、`png-long`。
 
 成功返回文件流，文件名见 `Content-Disposition`，也可对 `X-Filename` 响应头进行 URL 解码获取；PNG 多页时实际返回 `.zip`。失败返回非 2xx 状态和 JSON `{"error":"..."}`。
 
@@ -157,7 +157,7 @@ curl -f -O -J \
 | `scale` | 50–200 | PDF 谱面缩放百分比；100 为原始大小 |
 | `staffMode` | `tab` / `standard` | MusicXML / PDF / PNG 的六线谱或五线谱；PDF / PNG 缺省跟随原谱，Guitar Pro / JSON / alphaTex 输入转 MusicXML 缺省为六线谱，MusicXML 系输入缺省保留原谱 |
 | `unrollRepeats` | `1` | MIDI 展开反复 |
-| `mergeLyrics` | `1` | GP / GP5 / MusicXML / PDF / PNG 歌词并轨 |
+| `mergeLyrics` | `1` | GP / GPX / GP5 / MusicXML / PDF / PNG 歌词并轨 |
 | `jsonTempo` | 20–400 | 覆盖歌曲 JSON 的 BPM |
 | `jsonMiddleC` | 0–120 中的 C 音 MIDI 值（12 的倍数） | LL 原始详情的八度基准，默认 60；常用 48 / 60 / 72，二维时间线不受影响 |
 
@@ -192,7 +192,7 @@ bun tauri build          # 构建当前平台桌面包，需要 Rust 工具链
 
 `desktop` GitHub Actions 工作流支持手动构建 macOS Apple Silicon、macOS Intel 和 Windows x64 产物；发布 Release 时自动构建并上传安装包及 Windows 免安装版。手动运行只保存 Actions 产物。发布前同步更新项目版本号，Release 标签使用对应的 `v<版本>`。
 
-回归覆盖全部输出格式、选轨、歌曲 JSON / alphaTab JSON / alphaTex、MusicXML 直连与原文互转、MIDI 桥接、多页 PNG 与长图、GP5 双解析器回读及错误输入。TAB → 五线谱 → TAB 回读覆盖四/六/七弦、特殊调弦、变调夹和双谱表，并核对 alphaTab 与 MuseScore 读取的音高；直连路径断言不调用 MuseScore。使用真实文件与转换引擎。
+回归覆盖全部输出格式、选轨、歌曲 JSON / alphaTab JSON / alphaTex、MusicXML 直连与原文互转、MIDI 桥接、多页 PNG 与长图、GP5 / GPX 双解析器回读（GPX 额外比对起止 tick、歌词、变拍和选轨）及错误输入。TAB → 五线谱 → TAB 回读覆盖四/六/七弦、特殊调弦、变调夹和双谱表，并核对 alphaTab 与 MuseScore 读取的音高；直连路径断言不调用 MuseScore。使用真实文件与转换引擎。
 
 二维 GP 时间线转 GP 后，还可运行专项回读，比较音高、起止 tick、歌词、和弦及调弦弦品；检查完整音轨时不要启用选轨或歌词并轨：
 
@@ -206,6 +206,7 @@ bun scripts/verify-song-gp.ts /path/to/source.gp.json /path/to/output.gp
 | --- | --- |
 | `lib/convert.ts` | 共用转换核心、路由与音轨过滤 |
 | `lib/song-json.ts` | LL / 二维 GP 时间线 JSON 输入适配 |
+| `lib/gpx-writer.ts` | GP6 XML 适配、BCFS 扇区容器与 BCFZ 压缩写出 |
 | `lib/gp5-writer.ts` | GP5 二进制写出、调弦与弦品指派 |
 | `lib/gp-to-musicxml.ts` | 保留 TAB 谱表与弦品信息的 MusicXML 序列化器 |
 | `lib/formats.ts` / `lib/request.ts` | 格式定义、导出参数与上传校验 |
@@ -215,7 +216,7 @@ bun scripts/verify-song-gp.ts /path/to/source.gp.json /path/to/output.gp
 | `src-tauri/` | 静态前端打包、Rust 原生命令与 MuseScore / PNG / ZIP 适配 |
 | `scripts/` | 开发启动与真实文件校验 |
 
-Guitar Pro 与 MusicXML 系输入通过 alphaTab 直接解析，读取音轨和导出 GP / GP5 / JSON / alphaTex 不经过 MuseScore。JSON / alphaTex 转 MusicXML / XML / MXL 直接复用解析后的 Score，省去中间 GP 写出与回读；其余目标沿用 GP 链路。
+Guitar Pro 与 MusicXML 系输入通过 alphaTab 直接解析，读取音轨和导出 GP / GPX / GP5 / JSON / alphaTex 不经过 MuseScore。JSON / alphaTex 转 MusicXML / XML / MXL 直接复用解析后的 Score，省去中间 GP 写出与回读；其余目标沿用 GP 链路。
 
 MusicXML / XML / MXL 之间互转时，若未选轨、未开启歌词并轨且未指定谱表类型，保留原始 XML 字节，只复制或打包、解包；需要修改时再经过模型与自研序列化器。TAB 谱表保留调弦和弦品，纯五线谱以实际音高写出。MIDI 输入先由 MuseScore 桥接为 MusicXML；MIDI / PDF / PNG / MSCZ 目标仍由 MuseScore 导出。
 
@@ -223,7 +224,8 @@ PDF 选择「跟随原谱」时，若 MuseScore 无法直接从 Guitar Pro 生�
 
 ## 已知限制
 
-- **旧格式只读**：`.gp3` / `.gp4` / `.gpx` 仅支持输入；`.gp` 输出为 GP7/8，`.gp5` 输出为 GP5 v5.00。
+- **旧格式只读**：`.gp3` / `.gp4` 仅支持输入；`.gp` 输出为 GP7/8，`.gpx` 输出为 GP6，`.gp5` 输出为 GP5 v5.00。
+- **GPX 首版边界**：多谱表按谱表拆成独立音轨，名称增加 `(1)`、`(2)` 后缀，以保留各自调弦和变调夹；UTF-8 标题、歌词和和弦保留。使用 BCFS 容器及 BCFZ 压缩，每个内部文件上限 986 个扇区（约 3.85 MiB，按未压缩大小计），超限会明确报错。GP7/8 的音频伴奏、RSE 音色/效果链与轨内音色切换不保留；尚未在 Guitar Pro 6 桌面端人工试听。
 - **GP5 有格式与编码限制**：自研写出器保留音符、节奏、连音线、连音、力度、拍号调号、反复、调弦、变调夹及推弦、击勾弦、滑音、泛音、闷音、颤音等演奏效果；不保留和弦图，GP5 无法表达的效果会降级或跳过。非 ASCII 标题、歌词等文本降级为 `?`，中文歌词建议导出 MusicXML / PDF / PNG。MIDI 或钢琴 MusicXML 转 GP5 时会自动选择调弦并指派弦品，超出音域的音符可能按八度折叠；歌曲 JSON 路径会在音高改变时直接报错。
 - **纯五线谱不保留 TAB 把位**：五线谱输出不写依赖 TAB 调弦的弦号和品位，避免再次回读时误算音高。转回 TAB 会按音高重新指派弦品，可能与原把位不同；需要保留原调弦、变调夹和把位时选择 TAB 或跟随原谱保留 TAB。
 - **MIDI 与识别谱需要人工校正**：MIDI 不携带声部、连音线、临时记号拼写等谱面信息，MuseScore 需通过量化推断；演奏录制的 MIDI、自动识别草稿中的时值与记谱仍需对照原谱整理。

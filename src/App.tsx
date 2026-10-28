@@ -33,6 +33,7 @@ const TARGETS = [
   { value: "xml", label: "MusicXML (.xml)" },
   { value: "mxl", label: "MusicXML 压缩 (.mxl)" },
   { value: "gp", label: "Guitar Pro (.gp，GP7/8 可打开)" },
+  { value: "gpx", label: "Guitar Pro 6 (.gpx)" },
   { value: "gp5", label: "Guitar Pro 5 (.gp5，GP5 及以上可打开)" },
   { value: "json", label: "alphaTab JSON (.json)" },
   { value: "atex", label: "alphaTex (.atex)" },
@@ -55,6 +56,7 @@ const OPT_KEYS: Record<string, string[]> = {
   xml: ["staffMode", "mergeLyrics"],
   mxl: ["staffMode", "mergeLyrics"],
   gp: ["mergeLyrics"],
+  gpx: ["mergeLyrics"],
   gp5: ["mergeLyrics"],
 };
 
@@ -410,7 +412,7 @@ export default function Home() {
           <p className="text-muted-foreground text-xs leading-relaxed">
             Guitar Pro 谱转 MusicXML / GP 时直接解析原文件，保留六线谱、调弦与弦位品格；
             {STATIC_MODE ? "所有转换均在浏览器内完成。" : "其余转换由 MuseScore 引擎完成。"}选择六线谱时，非 Guitar Pro
-            来源会自动推断调弦并指派弦位品格。不支持导出 gp3 / gp4 / gpx。
+            来源会自动推断调弦并指派弦位品格。不支持导出 gp3 / gp4。
           </p>
         </CardFooter>
       </Card>

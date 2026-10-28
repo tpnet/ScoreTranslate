@@ -107,7 +107,7 @@ function buildMss(opts: ConvertOptions): string | null {
 // bytes 可以是 MusicXML 或任意 gp 系格式，ScoreLoader 自动识别
 async function exportGpFamily(
   bytes: Uint8Array,
-  target: "gp" | "gp5" | "json" | "atex",
+  target: "gp" | "gpx" | "gp5" | "json" | "atex",
   mergeLyrics = false,
   tracks?: number[],
 ): Promise<Uint8Array> {
@@ -117,6 +117,10 @@ async function exportGpFamily(
   if (mergeLyrics) mergeLyricsAcrossTracks(score);
   filterTracks(score, tracks);
   normalizeChordIds(score);
+  if (target === "gpx") {
+    const { exportGpx } = await import("./gpx-writer");
+    return exportGpx(score);
+  }
   if (target === "gp5") {
     const { exportGp5 } = await import("./gp5-writer");
     return exportGp5(score);
@@ -339,7 +343,7 @@ export async function convertScore(
   if (isGpInput && XML_TARGETS.includes(target)) {
     return inputToXmlTarget(input, target, baseName, options.staffMode, options.mergeLyrics, options.tracks);
   }
-  const isGpFamilyTarget = target === "gp" || target === "gp5" || target === "json" || target === "atex";
+  const isGpFamilyTarget = target === "gp" || target === "gpx" || target === "gp5" || target === "json" || target === "atex";
   if ((isGpInput || isXmlInput) && isGpFamilyTarget) {
     const data = await exportGpFamily(input, target, options.mergeLyrics, options.tracks).catch((e) => {
       if (e instanceof Error && e.message.startsWith("转换失败：")) throw e;

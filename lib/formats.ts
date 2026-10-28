@@ -2,7 +2,7 @@ export const INPUT_EXTS = [
   "mid", "midi", "gp", "gpx", "gp3", "gp4", "gp5", "mxl", "musicxml", "xml", "json", "atex",
 ] as const;
 
-export const OUTPUT_EXTS = ["mid", "musicxml", "xml", "mxl", "gp", "gp5", "json", "atex", "pdf", "png", "png-long", "mscz"] as const;
+export const OUTPUT_EXTS = ["mid", "musicxml", "xml", "mxl", "gp", "gpx", "gp5", "json", "atex", "pdf", "png", "png-long", "mscz"] as const;
 export type OutputExt = (typeof OUTPUT_EXTS)[number];
 
 export const STATIC_INPUT_EXTS: readonly string[] = INPUT_EXTS.filter(ext => ext !== "mid" && ext !== "midi");
@@ -15,7 +15,7 @@ export interface ConvertResult {
 }
 
 // 各目标格式的导出配置。所有字段可选，缺省即原有默认行为。
-// gp / gp5 / mscz 是全量结构转换，没有可配置项。
+// gp / gpx / gp5 / mscz 是全量结构转换，没有专属配置项。
 export interface ConvertOptions {
   /** 歌曲 JSON 的速度覆盖；二维 GP JSON 缺省为 120 BPM。 */
   jsonTempo?: number;
@@ -37,7 +37,7 @@ export interface ConvertOptions {
    * 非 gp 来源选 tab 会自动推断调弦并指派弦品
    */
   staffMode?: "tab" | "standard";
-  /** gp / gp5 / MusicXML / pdf / png：把人声轨歌词按时间对齐并入其他音轨（弹唱谱） */
+  /** gp / gpx / gp5 / MusicXML / pdf / png：把人声轨歌词按时间对齐并入其他音轨（弹唱谱） */
   mergeLyrics?: boolean;
   /** 只导出这些音轨（下标同 listTracks 的返回顺序），缺省导出全部 */
   tracks?: number[];
@@ -48,7 +48,7 @@ export const MAX_SIZE = 50 * 1024 * 1024;
 export const CONTENT_TYPES: Record<string, string> = {
   mid: "audio/midi", musicxml: "application/vnd.recordare.musicxml+xml",
   xml: "application/vnd.recordare.musicxml+xml", mxl: "application/vnd.recordare.musicxml",
-  gp: "application/octet-stream", gp5: "application/octet-stream",
+  gp: "application/octet-stream", gpx: "application/octet-stream", gp5: "application/octet-stream",
   json: "application/json", atex: "text/plain; charset=utf-8", mscz: "application/x-musescore",
   pdf: "application/pdf", png: "image/png", zip: "application/zip",
 };

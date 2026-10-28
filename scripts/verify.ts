@@ -8,6 +8,7 @@ import { PNG } from "pngjs";
 import { MAX_SIZE, OUTPUT_EXTS, type OutputExt, type Render } from "../lib/formats";
 import { convertScore, listTracks } from "../lib/convert";
 import { scoreToMusicXml } from "../lib/gp-to-musicxml";
+import { exportGpx } from "../lib/gpx-writer";
 import { parseOptions } from "../lib/request";
 import { render } from "../server/render";
 
@@ -35,7 +36,12 @@ const settings = new alphaTab.Settings();
 const load = (data: Uint8Array) => alphaTab.importer.ScoreLoader.loadScoreFromBytes(data, settings);
 const pitches = (s: alphaTab.model.Score) => s.tracks.map(t =>
   t.staves.flatMap(st => st.bars.flatMap(b =>
-    b.voices.flatMap(v => v.beats.flatMap(bt => bt.notes.map(n => n.realValue))))));
+    b.voices.flatMap(v => v.beats.flatMap(bt => bt.notes.map(n =>
+      n.isPercussion ? t.percussionArticulations[n.percussionArticulation]?.outputMidiNumber ?? n.realValue : n.realValue))))));
+const timeline = (s: alphaTab.model.Score) => s.tracks.flatMap(t => t.staves.map(st =>
+  st.bars.flatMap(b => b.voices.flatMap(v => v.beats.filter(bt => !bt.isEmpty).map(bt => [
+    bt.absolutePlaybackStart, bt.playbackDuration, bt.notes.map(n => n.realValue).sort((a,b) => a-b), bt.lyrics ?? [],
+  ]))).map(event => JSON.stringify(event)).sort()));
 const score = load(fixture);
 const gp = new alphaTab.exporter.Gp7Exporter().export(score, settings);
 let checks = 0;
@@ -139,7 +145,7 @@ try {
     const trackForm = new FormData(); trackForm.set("file",new File([input as BlobPart],`score.${ext}`));
     assert.deepEqual((await (await fetch(`${url}/api/tracks`,{method:"POST",body:trackForm})).json()).tracks,["Guitar","Bass"]);
     assert.deepEqual((await convert(input,`score.${ext}`,"xml")).bytes,fixture);
-    for (const target of ["musicxml","xml","mxl","gp","gp5","json","atex"] as const) {
+    for (const target of ["musicxml","xml","mxl","gp","gpx","gp5","json","atex"] as const) {
       const result = await convertScore(input,ext,target,"score",{},noMuseScore);
       assert.equal(result.filename,`score.${target}`);
       if (["musicxml","xml","mxl"].includes(target)) {
@@ -171,7 +177,7 @@ try {
     const {bytes,filename} = await convert(gp,"测试.gp",target,{dpi:"50",trim:"0",paper:"a4",scale:"100",unrollRepeats:"1"});
     outputs.set(target,bytes);
     assert(filename.startsWith("测试."));
-    if (["musicxml","xml","mxl","gp","gp5"].includes(target)) assert.equal(load(bytes).tracks.length,2);
+    if (["musicxml","xml","mxl","gp","gpx","gp5"].includes(target)) assert.equal(load(bytes).tracks.length,2);
     else if (target === "json") assert(JSON.parse(new TextDecoder().decode(bytes)));
     else if (target === "atex") assert(new TextDecoder().decode(bytes).includes("\\track"));
     else if (target === "pdf") assert.equal(new TextDecoder().decode(bytes.slice(0,4)),"%PDF");
@@ -184,7 +190,7 @@ try {
 
   for (const target of OUTPUT_EXTS) {
     const {bytes} = await convert(gp,"selected.gp",target,{tracks:"1",staffMode:"tab",dpi:"50",mergeLyrics:"1"});
-    if (["musicxml","xml","mxl","gp","gp5"].includes(target)) assert.equal(load(bytes).tracks.length,1);
+    if (["musicxml","xml","mxl","gp","gpx","gp5"].includes(target)) assert.equal(load(bytes).tracks.length,1);
     if (target === "atex") {
       const importer = new alphaTab.importer.AlphaTexImporter();
       importer.initFromString(new TextDecoder().decode(bytes),settings);
@@ -233,7 +239,7 @@ try {
     } else {
       assert.equal(load((await convert(input,source,"gp")).bytes).tempo,120);
     }
-    for (const target of ["gp","musicxml","xml","mxl"] as const) {
+    for (const target of ["gp","gpx","musicxml","xml","mxl"] as const) {
       const bytes = target === "gp" ? song.bytes : (await convert(input,source,target,options)).bytes;
       assert.equal(load(bytes).tempo,89);
       const output = path.join(dir,`${source}.${target}`);
@@ -242,7 +248,7 @@ try {
       const [out,error] = await Promise.all([new Response(check.stdout).text(),new Response(check.stderr).text()]);
       assert.equal(await check.exited,0,`${source} → ${target}: ${out}\n${error}`);
     }
-    for (const target of ["gp5","musicxml","pdf"] as const) {
+    for (const target of ["gpx","gp5","musicxml","pdf"] as const) {
       const selected = await convert(input,source,target,{...options,tracks:"1"});
       if (target !== "pdf") assert.equal(load(selected.bytes).tracks.length,1);
       else assert.equal(new TextDecoder().decode(selected.bytes.slice(0,4)),"%PDF");
@@ -260,9 +266,9 @@ try {
     }
     passed(`${source} 音轨、BPM/八度、段落、歌词和弦、跨小节/重叠音符回读及选轨导出`);
   }
-  for (const target of ["gp","gp5","json","atex","musicxml","pdf"] as const) {
+  for (const target of ["gp","gpx","gp5","json","atex","musicxml","pdf"] as const) {
     const {bytes} = await convert(fixture,"bridge.musicxml",target,{tracks:"1",staffMode:"tab"});
-    if (["gp","gp5","musicxml"].includes(target)) assert.equal(load(bytes).tracks.length,1);
+    if (["gp","gpx","gp5","musicxml"].includes(target)) assert.equal(load(bytes).tracks.length,1);
     passed(`MusicXML 直接解析、选轨 → ${target}`);
   }
   for (const target of ["pdf","mid","mscz"] as const) {
@@ -279,6 +285,9 @@ try {
   }
   const midiXml = await convert(outputs.get("mid")!,"score.mid","musicxml",{tracks:"1",staffMode:"tab"});
   assert.equal(load(midiXml.bytes).tracks.length,1);
+  const midiGpx = await convert(outputs.get("mid")!,"score.mid","gpx",{tracks:"1"});
+  assert.deepEqual(timeline(load(midiGpx.bytes)),timeline(load(midiXml.bytes)));
+  assert.deepEqual(timeline(load(await (native ? nativeRender : render)(midiGpx.bytes,{inputExt:"gpx",target:"musicxml"}))),timeline(load(midiXml.bytes)));
   passed("MIDI 桥接与选轨");
 
   const pages = await convert(fixture,"多页.musicxml","png",{dpi:"50"});
@@ -308,9 +317,87 @@ try {
   await writeFile(path.join(dir,"readback.gp5"),gp5);
   passed("GP / MusicXML → GP5 alphaTab + MuseScore 双解析器音高回读");
 
+  // GPX 独立读取器必须同时保留节拍与歌词，不能只看扩展名或音符数量。
+  for (const [input, ext] of [[gp,"gp"],[fixture,"musicxml"]] as const) for (const tracks of [undefined,[1]]) {
+    const result = await convert(input,`节拍歌词.${ext}`,"gpx",{mergeLyrics:"1",...(tracks ? {tracks:"1"} : {})});
+    assert.equal(new TextDecoder().decode(result.bytes.subarray(0,4)),"BCFZ");
+    assert.equal(result.filename,"节拍歌词.gpx");
+    const expected = load((await convertScore(input,ext,"gp","expected",{mergeLyrics:true,tracks},noMuseScore)).data);
+    const parsed = load(result.bytes);
+    const mscore = load(await (native ? nativeRender : render)(result.bytes,{inputExt:"gpx",target:"musicxml"}));
+    for (const readback of [parsed,mscore]) {
+      assert.deepEqual(readback.tracks.map(t=>t.name),expected.tracks.map(t=>t.name));
+      assert.deepEqual(pitches(readback),pitches(expected));
+      assert.deepEqual(timeline(readback),timeline(expected),`${ext} → GPX 音高、起止 tick、休止符与歌词`);
+      assert.equal(readback.tempo,expected.tempo);
+      assert.deepEqual(readback.masterBars.map(b=>[b.timeSignatureNumerator,b.timeSignatureDenominator]),
+        expected.masterBars.map(b=>[b.timeSignatureNumerator,b.timeSignatureDenominator]));
+    }
+  }
+  passed("GP / MusicXML → GPX 全轨与选第二轨：alphaTab + MuseScore 音高、节拍、歌词回读");
+
+  const rhythmImporter = new alphaTab.importer.AlphaTexImporter();
+  rhythmImporter.initFromString(String.raw`\tempo 96 . \ts 6 8 :8 0.6 2.6 3.6 0.5 r 3.5 | \ts 5 4 :4 5.3 7.3 9.3 7.2 5.1`,settings);
+  const rhythm = rhythmImporter.readScore();
+  const lyricText = '中文 <Track id="9"> & </Track>';
+  rhythm.tracks[0].staves[0].bars[0].voices[0].beats[0].lyrics = [lyricText];
+  const rhythmGp = new alphaTab.exporter.Gp7Exporter().export(rhythm,settings);
+  const rhythmData = (await convert(rhythmGp,"rhythm.gp","gpx")).bytes;
+  const rhythmParsed = load(rhythmData);
+  assert.deepEqual(timeline(rhythmParsed),timeline(load(rhythmGp)));
+  assert.deepEqual(rhythmParsed.masterBars.map(b=>[b.timeSignatureNumerator,b.timeSignatureDenominator]),[[6,8],[5,4]]);
+  assert.equal(rhythmParsed.tempo,96);
+  const rhythmXml = await (native ? nativeRender : render)(rhythmData,{inputExt:"gpx",target:"musicxml"});
+  const rhythmMs = load(rhythmXml);
+  assert.deepEqual(timeline(rhythmMs),timeline(load(rhythmGp)));
+  assert.equal(rhythmMs.tempo,96);
+  assert.equal(rhythmMs.tracks[0].staves[0].bars[0].voices[0].beats[0].lyrics?.[0],lyricText);
+  passed("GPX 6/8 → 5/4 变拍、休止符、速度与中文歌词双解析器回读");
+
+  const split = load(new TextEncoder().encode(scoreToMusicXml(custom,"original")));
+  const expectedSplit = pitches(split).flatMap((_,i)=>split.tracks[i].staves.map(st=>
+    st.bars.flatMap(b=>b.voices.flatMap(v=>v.beats.flatMap(bt=>bt.notes.map(n=>n.realValue))))));
+  const expectedTimeline = timeline(split);
+  split.title = '中文 🎵 <Track id="9"> & </Track>';
+  const splitData = await exportGpx(split);
+  const splitReadback = load(splitData);
+  assert.equal(splitReadback.title,split.title);
+  assert.deepEqual(pitches(splitReadback),expectedSplit);
+  assert.deepEqual(timeline(splitReadback),expectedTimeline);
+  assert.deepEqual(splitReadback.tracks.map(t=>t.name),["Guitar (1)","Guitar (2)","Bass (1)","Bass (2)"]);
+  for (const [i,t] of splitReadback.tracks.entries()) {
+    assert.deepEqual(t.staves[0].tuning,split.tracks[i].staves[0].tuning);
+    assert.equal(t.staves[0].capo,split.tracks[i].staves[0].capo);
+  }
+  const splitXml = await (native ? nativeRender : render)(splitData,{inputExt:"gpx",target:"musicxml"});
+  assert.deepEqual(pitches(load(splitXml)),expectedSplit);
+  passed("GPX 多谱表拆轨、七弦/四弦调弦、变调夹、中文及 XML 特殊文本");
+
+  const drums = load(fixture);
+  drums.tracks = drums.tracks.slice(0,1);
+  const drumTrack = drums.tracks[0];
+  drumTrack.name = "Drums";
+  drumTrack.playbackInfo.primaryChannel = drumTrack.playbackInfo.secondaryChannel = 9;
+  drumTrack.playbackInfo.program = 0;
+  const drumStaff = drumTrack.staves[0];
+  drumStaff.isPercussion = true;
+  drumStaff.stringTuning.tunings = [];
+  drumStaff.bars.forEach((bar,i)=>bar.voices.forEach(v=>v.beats.forEach(bt=>bt.notes.forEach(note=> {
+    note.string = note.fret = note.octave = note.tone = -1;
+    note.percussionArticulation = [36,38,42,49][i];
+  }))));
+  const drumPitches = pitches(drums);
+  const drumData = await exportGpx(drums);
+  assert.deepEqual(pitches(load(drumData)),drumPitches);
+  assert.deepEqual(pitches(load(await (native ? nativeRender : render)(drumData,{inputExt:"gpx",target:"musicxml"}))),drumPitches);
+  const tooLarge = load(fixture);
+  tooLarge.title = "大".repeat(1_400_000);
+  await assert.rejects(exportGpx(tooLarge),/GPX 内部文件超过/);
+  passed("GPX 打击乐双解析器回读与超大内部文件的明确拒绝");
+
   const bad = new FormData();bad.set("file",new File(["bad"],"bad.gp"));bad.set("target","gp5");
   assert.equal((await fetch(`${url}/api/convert`,{method:"POST",body:bad})).status,500);
-  bad.set("target","gpx");
+  bad.set("target","gp4");
   assert.equal((await fetch(`${url}/api/convert`,{method:"POST",body:bad})).status,400);
   passed("损坏输入与禁止旧格式输出");
   console.log(`完成 ${checks} 组真实转换校验。`);
