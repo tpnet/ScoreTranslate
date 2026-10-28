@@ -1,6 +1,6 @@
 # ScoreTranslate
 
-简体中文 | [English](README.en.md) · [官网](https://tpnet.github.io/ScoreTranslate/) · [下载桌面版](https://github.com/tpnet/ScoreTranslate/releases)
+简体中文 | [English](README.en.md) · [官网](https://tpnet.github.io/ScoreTranslate/) · [网页版](https://scoretranslate.vercel.app/) · [下载桌面版](https://github.com/tpnet/ScoreTranslate/releases)
 
 乐谱格式转换工具，支持 Guitar Pro、MusicXML、MIDI、歌曲 JSON 等格式互转，以及 PDF、PNG 导出。
 
@@ -35,6 +35,10 @@
 PNG 单页返回图片，多页自动打包为 ZIP；PNG 长图将各页纵向拼接，超过 **1 亿像素**时会报错，可降低 DPI 后重试。
 
 ## 快速开始
+
+### 在线网页版
+
+直接打开 [ScoreTranslate 网页版](https://scoretranslate.vercel.app/)，无需安装，文件在浏览器内转换，不上传服务器。支持 Guitar Pro（含 GPX）、MusicXML、JSON 与 alphaTex 互转、选轨和歌词并轨。MIDI 输入及 MIDI / PDF / PNG / MSCZ 输出请使用桌面版或完整 Web 服务。
 
 ### 桌面版
 

@@ -1,6 +1,6 @@
 # ScoreTranslate
 
-[简体中文](README.md) | English · [Website](https://tpnet.github.io/ScoreTranslate/) · [Download desktop app](https://github.com/tpnet/ScoreTranslate/releases)
+[简体中文](README.md) | English · [Website](https://tpnet.github.io/ScoreTranslate/) · [Web app](https://scoretranslate.vercel.app/) · [Download desktop app](https://github.com/tpnet/ScoreTranslate/releases)
 
 A sheet-music converter for Guitar Pro, MusicXML, MIDI, song JSON and more, with PDF and PNG export.
 
@@ -35,6 +35,10 @@ Select tracks and configure export options as needed:
 PNG returns an image for a single page and a ZIP for multiple pages. Long PNG stitches pages vertically; exports exceeding **100 million pixels** fail with an error. Lower the DPI to retry.
 
 ## Get started
+
+### Online web app
+
+Open the [ScoreTranslate web app](https://scoretranslate.vercel.app/) with no installation. Files are converted inside your browser without uploads. It supports Guitar Pro (including GPX), MusicXML, JSON and alphaTex conversion, track selection and lyric merging. MIDI input and MIDI / PDF / PNG / MSCZ output require the desktop app or full web server.
 
 ### Desktop app
 

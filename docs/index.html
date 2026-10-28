@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <meta name="description" content="Guitar Pro、MusicXML、MIDI 与歌曲 JSON 格式转换，支持 PDF、PNG 导出。下载本地桌面版，或自行部署 Web 版。">
+  <meta name="description" content="Guitar Pro、MusicXML、MIDI 与歌曲 JSON 格式转换，支持 PDF、PNG 导出。下载本地桌面版，或直接使用网页版。">
   <meta name="theme-color" content="#f5f4ef">
   <title>ScoreTranslate — 让乐谱，自由流转</title>
   <style>
@@ -163,7 +163,7 @@
         <p class="lead"><span class="zh">从 Guitar Pro 到 MusicXML，从 MIDI 到可分享的 PDF。把手中的乐谱，转换成下一步需要的格式。</span><span class="en">From Guitar Pro to MusicXML. From MIDI to a shareable PDF. Turn the score you have into the format you need next.</span></p>
         <div class="actions">
           <a class="button" href="https://github.com/tpnet/ScoreTranslate/releases/latest"><span class="zh">下载桌面版</span><span class="en">Download desktop</span><span aria-hidden="true">↗</span></a>
-          <a class="button secondary" href="#start"><span class="zh">自行部署 Web 版</span><span class="en">Run the web app</span><span aria-hidden="true">↓</span></a>
+          <a class="button secondary" href="https://scoretranslate.vercel.app/"><span class="zh">打开网页版</span><span class="en">Open web app</span><span aria-hidden="true">↗</span></a>
         </div>
         <p class="small hero-note"><span class="zh">macOS / Windows · 免费开源 · PDF / PNG / MIDI 需另装 MuseScore 4</span><span class="en">macOS / Windows · Free &amp; open source · PDF / PNG / MIDI require MuseScore 4</span></p>
       </div>
@@ -219,7 +219,7 @@
     </section>
 
     <section id="start" aria-labelledby="start-title">
-      <div class="section-heading"><div><p class="eyebrow">03 / Get started</p><h2 id="start-title"><span class="zh">选择适合你的使用方式。</span><span class="en">Make it part of your workflow.</span></h2></div><p><span class="zh">日常使用下载桌面版；浏览器转换可静态部署，需要完整格式和 HTTP 接口时运行 Web 服务。</span><span class="en">Use the desktop app, deploy a browser-only static app, or run the full web server for all formats and the HTTP API.</span></p></div>
+      <div class="section-heading"><div><p class="eyebrow">03 / Get started</p><h2 id="start-title"><span class="zh">选择适合你的使用方式。</span><span class="en">Make it part of your workflow.</span></h2></div><p><span class="zh">直接使用<a href="https://scoretranslate.vercel.app/">网页版</a>，或下载桌面版；需要完整格式和 HTTP 接口时，可自行运行 Web 服务。</span><span class="en">Open the <a href="https://scoretranslate.vercel.app/">web app</a> or download the desktop app; run your own web server for all formats and the HTTP API.</span></p></div>
       <div class="start-grid">
         <article class="start-card"><p class="eyebrow">Desktop</p><h3><span class="zh">下载，打开，转换。</span><span class="en">Download. Open. Convert.</span></h3><p><span class="zh">macOS 13+ 支持 Apple Silicon 与 Intel；Windows x64 提供安装版与免安装版。转换在本机完成，无需 Bun 或 Node.js。</span><span class="en">macOS 13+ on Apple Silicon and Intel; installer and portable versions for Windows x64. Conversion runs locally, without Bun or Node.js.</span></p><a class="button" href="https://github.com/tpnet/ScoreTranslate/releases/latest"><span class="zh">查看下载版本</span><span class="en">View downloads</span><span aria-hidden="true">↗</span></a><p class="small"><span class="zh">Windows 免安装版需要 WebView2 Runtime。首次启动的系统拦截处理见下方常见问题。</span><span class="en">Windows portable requires WebView2 Runtime. See below for first-launch security prompts.</span></p><a class="text-link doc-link" href="https://github.com/tpnet/ScoreTranslate/blob/main/README.md"><span class="zh">阅读完整使用文档 ↗</span><span class="en">Read the full documentation ↗</span></a></article>
         <article class="start-card"><p class="eyebrow">Web / Static</p><h3><span class="zh">在浏览器里处理乐谱。</span><span class="en">Work in your browser.</span></h3><p><span class="zh">完整 Web 版：安装 Bun 与 MuseScore 4，获取源码后运行：</span><span class="en">Full web app: install Bun and MuseScore 4, then clone and run:</span></p><pre><code>git clone https://github.com/tpnet/ScoreTranslate.git
@@ -253,8 +253,8 @@ bun run dev</code></pre><p class="small"><span class="zh">打开 <a href="http:/
       button.setAttribute('aria-label', chinese ? 'Switch to English' : '切换到简体中文');
       document.title = chinese ? 'ScoreTranslate — 让乐谱，自由流转' : 'ScoreTranslate — Keep your music moving';
       document.querySelector('meta[name="description"]').content = chinese
-        ? 'Guitar Pro、MusicXML、MIDI 与歌曲 JSON 格式转换，支持 PDF、PNG 导出。下载本地桌面版，或自行部署 Web 版。'
-        : 'Convert Guitar Pro, MusicXML, MIDI and song JSON. Export PDF and PNG. Download the local desktop app or host the web version yourself.';
+        ? 'Guitar Pro、MusicXML、MIDI 与歌曲 JSON 格式转换，支持 PDF、PNG 导出。下载本地桌面版，或直接使用网页版。'
+        : 'Convert Guitar Pro, MusicXML, MIDI and song JSON. Export PDF and PNG. Download the local desktop app or use the web app online.';
       document.querySelectorAll('.doc-link').forEach(link => {
         link.href = `https://github.com/tpnet/ScoreTranslate/blob/main/README${chinese ? '' : '.en'}.md`;
       });
