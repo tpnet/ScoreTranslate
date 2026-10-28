@@ -5,6 +5,9 @@ export const INPUT_EXTS = [
 export const OUTPUT_EXTS = ["mid", "musicxml", "xml", "mxl", "gp", "gp5", "json", "atex", "pdf", "png", "png-long", "mscz"] as const;
 export type OutputExt = (typeof OUTPUT_EXTS)[number];
 
+export const STATIC_INPUT_EXTS: readonly string[] = INPUT_EXTS.filter(ext => ext !== "mid" && ext !== "midi");
+export const STATIC_OUTPUT_EXTS: readonly string[] = OUTPUT_EXTS.filter(ext => !["mid", "pdf", "png", "png-long", "mscz"].includes(ext));
+
 export interface ConvertResult {
   data: Uint8Array;
   filename: string;

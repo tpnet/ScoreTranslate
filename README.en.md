@@ -4,7 +4,7 @@
 
 A sheet-music converter for Guitar Pro, MusicXML, MIDI, song JSON and more, with PDF and PNG export.
 
-Desktop conversion runs locally. The web version processes files on its companion server; running that server locally keeps files on your machine. React + Vite powers the frontend, Bun serves the web app, and Tauri powers the desktop app. Both share a TypeScript conversion core, with no database.
+Desktop conversion runs locally. The full web version processes files on its companion server; running that server locally keeps files on your machine. The static web version converts files inside the browser without uploading them. React + Vite powers the frontend, Bun serves the full web app, and Tauri powers the desktop app. They share a TypeScript conversion core, with no database.
 
 [Supported formats](#supported-formats) · [Get started](#get-started) · [Song JSON to Guitar Pro](#song-json-to-guitar-pro) · [HTTP API](#http-api) · [Development and verification](#development-and-verification) · [Known limitations](#known-limitations)
 
@@ -72,6 +72,30 @@ bun run start
 
 Bun serves both `dist/` and the conversion API, listening on `127.0.0.1:3000` by default. For remote deployment, explicitly set `HOSTNAME` / `PORT` and configure an HTTPS reverse proxy. Install MuseScore on the server; browser users do not need it. Hosting only `dist/` does not provide full conversion support.
 
+### Vercel / static deployment
+
+The repository's `vercel.json` configures a static Vite deployment. Import the Git repository into Vercel and select the project root as Root Directory:
+
+| Setting | Value |
+| --- | --- |
+| Framework Preset | `Vite` |
+| Install Command | `bun install --frozen-lockfile` |
+| Build Command | `bun run build:static` |
+| Output Directory | `dist` |
+
+No environment variables, Bun server, or MuseScore installation are required. `build:static` sets `VITE_STATIC_MODE=1` at build time. Conversion and track listing use the existing Web Worker inside the browser without calling `/api/*`. Other static hosts can serve the same `dist/` output.
+
+Static mode supports conversion between Guitar Pro (gp / gpx / gp3–5), MusicXML (musicxml / xml / mxl), JSON, and alphaTex. Track selection, lyric merging, and song JSON tempo/octave options remain available. **MIDI input and MIDI / PDF / PNG (including long PNG) / MSCZ output are unavailable** and hidden in the UI. The 50 MB file limit still applies; practical capacity depends on browser and device memory.
+
+Preview the static build locally without a conversion API:
+
+```bash
+bun run build:static
+bun x --no-install vite preview --host 127.0.0.1 --port 4173
+```
+
+Open [http://127.0.0.1:4173](http://127.0.0.1:4173). Static deployments provide no HTTP conversion API. Use the Bun deployment above for full format support and HTTP clients. `bun run dev` / `bun run build` continue to use the web API by default, and desktop builds always retain native MuseScore support. Run `bun run build` again before switching from a static preview to the full web server.
+
 ### Configure the MuseScore path
 
 The web and desktop apps use the same default lookup locations:
@@ -105,7 +129,7 @@ Device sounds, automatic accompaniment and extended control events are not conve
 
 ## HTTP API
 
-These endpoints are provided by the web app. Start the development or production server first.
+These endpoints are provided by the full Bun web app, not static deployments. Start the development or production server first.
 
 ### Convert a file
 
@@ -157,6 +181,7 @@ curl -f -F "file=@score.gp5" http://localhost:3000/api/tracks
 
 ```bash
 bun run build            # TypeScript checks + Vite static build
+bun run build:static     # Browser-only conversion build for Vercel and other static hosts
 bun run verify           # Real web HTTP regression checks; requires MuseScore 4
 bun run verify --native  # Same cases through Rust; builds the native verification entry
 bun tauri dev            # Desktop development window; requires Rust
@@ -185,7 +210,7 @@ bun scripts/verify-song-gp.ts /path/to/source.gp.json /path/to/output.gp
 | `lib/gp-to-musicxml.ts` | MusicXML serializer preserving TAB staves and string/fret data |
 | `lib/formats.ts` / `lib/request.ts` | Format definitions, export options and upload validation |
 | `src/App.tsx` | Upload, format and option selection, download UI |
-| `src/platform.ts` / `src/convert.worker.ts` | Web HTTP / desktop IPC entry points and desktop background conversion |
+| `src/platform.ts` / `src/worker-client.ts` / `src/convert.worker.ts` | Web HTTP / static browser / desktop IPC entry points and background conversion |
 | `server/` | Bun HTTP server, conversion / track endpoints and MuseScore / PNG adapter |
 | `src-tauri/` | Static frontend packaging, Rust commands and MuseScore / PNG / ZIP adapter |
 | `scripts/` | Development launcher and real-file verification |

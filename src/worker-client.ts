@@ -1,5 +1,5 @@
-import { invoke } from "@tauri-apps/api/core";
-import { OUTPUT_EXTS, type ConvertResult, type OutputExt } from "@/lib/formats";
+import { isTauri, invoke } from "@tauri-apps/api/core";
+import { OUTPUT_EXTS, STATIC_INPUT_EXTS, STATIC_OUTPUT_EXTS, type ConvertResult, type OutputExt } from "@/lib/formats";
 import { validateFile, parseOptions } from "@/lib/request";
 import type { Job, RenderReply, WorkerReply } from "./jobs";
 
@@ -14,6 +14,7 @@ function getWorker(): Worker {
   current.onmessage = async ({ data }: MessageEvent<WorkerReply>) => {
     if (data.type === "render") {
       try {
+        if (!isTauri()) throw new Error("静态模式不支持需要 MuseScore 的转换，请使用本地 Web 或桌面版");
         const bytes = new Uint8Array(await invoke<ArrayBuffer>("render_score", data.input, {
           headers: { "x-score-options": JSON.stringify(data.request) },
         }));
@@ -41,8 +42,13 @@ function getWorker(): Worker {
 export async function request(action: "convert" | "tracks", form: FormData): Promise<Response> {
   const file = form.get("file");
   validateFile(file);
-  const target = form.get("target") ?? "pdf";
+  const target = form.get("target") ?? (isTauri() ? "pdf" : "musicxml");
   if (typeof target !== "string" || !(OUTPUT_EXTS as readonly string[]).includes(target)) throw new Error("不支持的目标格式");
+  if (!isTauri()) {
+    const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+    if (!STATIC_INPUT_EXTS.includes(ext)) throw new Error("静态模式不支持 MIDI 输入，请使用本地 Web 或桌面版");
+    if (action === "convert" && !STATIC_OUTPUT_EXTS.includes(target)) throw new Error("静态模式不支持该输出格式，请使用本地 Web 或桌面版");
+  }
   const input = new Uint8Array(await file.arrayBuffer());
   const current = getWorker();
   const result = await new Promise<ConvertResult | string[]>((resolve, reject) => {

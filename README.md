@@ -4,7 +4,7 @@
 
 乐谱格式转换工具，支持 Guitar Pro、MusicXML、MIDI、歌曲 JSON 等格式互转，以及 PDF、PNG 导出。
 
-桌面版在本机完成转换；Web 版由配套服务器处理文件，本机部署时文件不会上传到外部服务。前端使用 React + Vite，Web 服务使用 Bun，桌面版使用 Tauri；两端共用 TypeScript 转换核心，无数据库。
+桌面版在本机完成转换；完整 Web 版由配套服务器处理文件，本机部署时文件不会上传到外部服务；静态 Web 版在浏览器内完成转换，不上传文件。前端使用 React + Vite，Web 服务使用 Bun，桌面版使用 Tauri；共用 TypeScript 转换核心，无数据库。
 
 [支持的格式](#支持的格式) · [快速开始](#快速开始) · [歌曲 JSON 转 Guitar Pro](#歌曲-json-转-guitar-pro) · [HTTP 接口](#http-接口) · [开发与验证](#开发与验证) · [已知限制](#已知限制)
 
@@ -72,6 +72,30 @@ bun run start
 
 Bun 同时提供 `dist/` 静态页面和转换 API，默认监听 `127.0.0.1:3000`。远程部署时显式设置 `HOSTNAME` / `PORT`，并配置 HTTPS 反向代理。MuseScore 安装在服务器上，用户浏览器无需安装；仅部署 `dist/` 静态文件不能提供完整转换能力。
 
+### Vercel / 纯静态部署
+
+仓库的 `vercel.json` 已配置 Vite 静态部署。在 Vercel 导入 Git 仓库，Root Directory 选择项目根目录即可，安装、构建和输出目录分别为：
+
+| 配置 | 值 |
+| --- | --- |
+| Framework Preset | `Vite` |
+| Install Command | `bun install --frozen-lockfile` |
+| Build Command | `bun run build:static` |
+| Output Directory | `dist` |
+
+无需配置环境变量、启动 Bun 服务或安装 MuseScore。`build:static` 在构建时设置 `VITE_STATIC_MODE=1`，转换与音轨读取复用浏览器 Web Worker，不请求 `/api/*`。其他静态托管平台也可部署这个命令生成的 `dist/`。
+
+静态版支持 Guitar Pro（gp / gpx / gp3–5）、MusicXML（musicxml / xml / mxl）、JSON、alphaTex 之间互转，保留选轨、歌词并轨及歌曲 JSON 的速度和八度设置。**MIDI 输入以及 MIDI / PDF / PNG（含长图）/ MSCZ 输出不可用**，页面会隐藏相关选项。文件上限仍为 50 MB，实际可处理大小受浏览器和设备内存限制。
+
+本地预览静态部署（仅启动静态文件服务，不启动转换 API）：
+
+```bash
+bun run build:static
+bun x --no-install vite preview --host 127.0.0.1 --port 4173
+```
+
+打开 [http://127.0.0.1:4173](http://127.0.0.1:4173)。静态部署不提供 HTTP 转换接口；需要完整格式或 HTTP API 时，使用上面的 Bun 服务部署。`bun run dev` / `bun run build` 默认仍使用 Web API，桌面版始终保留原生 MuseScore 功能；从静态预览切回完整 Web 服务前，重新执行 `bun run build`。
+
 ### MuseScore 路径配置
 
 Web 和桌面版共用以下默认查找位置：
@@ -105,7 +129,7 @@ export MSCORE_PATH="/your/path/to/mscore"
 
 ## HTTP 接口
 
-以下接口由 Web 版提供，先启动开发或生产服务。
+以下接口由完整 Web（Bun）版提供，先启动开发或生产服务；静态版不提供这些接口。
 
 ### 转换文件
 
@@ -157,6 +181,7 @@ curl -f -F "file=@score.gp5" http://localhost:3000/api/tracks
 
 ```bash
 bun run build            # TypeScript 检查 + Vite 静态构建
+bun run build:static     # 纯浏览器转换构建，适用于 Vercel 等静态托管
 bun run verify           # Web HTTP 真实文件回归，需要 MuseScore 4
 bun run verify --native  # 同一组用例验证 Rust 路径，自动构建原生校验入口
 bun tauri dev            # 桌面开发窗口，需要 Rust 工具链
@@ -185,7 +210,7 @@ bun scripts/verify-song-gp.ts /path/to/source.gp.json /path/to/output.gp
 | `lib/gp-to-musicxml.ts` | 保留 TAB 谱表与弦品信息的 MusicXML 序列化器 |
 | `lib/formats.ts` / `lib/request.ts` | 格式定义、导出参数与上传校验 |
 | `src/App.tsx` | 上传、格式与选项选择、下载界面 |
-| `src/platform.ts` / `src/convert.worker.ts` | Web HTTP / 桌面 IPC 入口与桌面后台转换 |
+| `src/platform.ts` / `src/worker-client.ts` / `src/convert.worker.ts` | Web HTTP / 静态浏览器 / 桌面 IPC 入口与后台转换 |
 | `server/` | Bun HTTP 服务、转换 / 音轨接口与 MuseScore / PNG 适配 |
 | `src-tauri/` | 静态前端打包、Rust 原生命令与 MuseScore / PNG / ZIP 适配 |
 | `scripts/` | 开发启动与真实文件校验 |

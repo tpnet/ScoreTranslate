@@ -11,6 +11,7 @@ import {
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -20,9 +21,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
-import { request } from "./platform";
+import { INPUT_EXTS, STATIC_INPUT_EXTS, STATIC_OUTPUT_EXTS } from "@/lib/formats";
+import { validateFile } from "@/lib/request";
+import { request, STATIC_MODE } from "./platform";
 
-const ACCEPT = ".mid,.midi,.gp,.gpx,.gp3,.gp4,.gp5,.mxl,.musicxml,.xml,.json,.atex";
+const ACCEPT = (STATIC_MODE ? STATIC_INPUT_EXTS : INPUT_EXTS).map(ext => `.${ext}`).join(",");
 
 const TARGETS = [
   { value: "mid", label: "MIDI (.mid)" },
@@ -37,7 +40,7 @@ const TARGETS = [
   { value: "pdf", label: "PDF (.pdf)" },
   { value: "png", label: "PNG 图片（多页自动打包 zip）" },
   { value: "png-long", label: "PNG 长图（多页纵向拼接）" },
-];
+].filter(t => !STATIC_MODE || STATIC_OUTPUT_EXTS.includes(t.value));
 
 // 后端按 gp 系处理的输入（json / atex 先转成 .gp），MusicXML 目标缺省输出六线谱
 const GP_INPUTS = ["gp", "gpx", "gp3", "gp4", "gp5", "json", "atex"];
@@ -67,7 +70,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 export default function Home() {
   const [file, setFile] = useState<File | null>(null);
-  const [target, setTarget] = useState("pdf");
+  const [target, setTarget] = useState(STATIC_MODE ? "musicxml" : "pdf");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [dragging, setDragging] = useState(false);
@@ -79,7 +82,7 @@ export default function Home() {
   const inputExt = file?.name.split(".").pop()?.toLowerCase() ?? "";
   const isGpInput = GP_INPUTS.includes(inputExt);
 
-  // 选定文件后读音轨名（非 gp 输入要跑一趟 MuseScore，所以只在换文件时读一次）。
+  // 只在换文件时读音轨；MIDI 输入需要 MuseScore 桥接。
   // 读取失败不报错，只是不显示勾选框，转换时导出全部音轨
   useEffect(() => {
     if (!file) return;
@@ -105,6 +108,15 @@ export default function Home() {
 
   const pick = (f: File | undefined) => {
     if (!f) return;
+    try {
+      validateFile(f);
+      const ext = f.name.split(".").pop()?.toLowerCase() ?? "";
+      if (STATIC_MODE && !STATIC_INPUT_EXTS.includes(ext)) throw new Error("静态模式不支持 MIDI 输入，请使用本地 Web 或桌面版");
+      if (STATIC_MODE && ext === target) setTarget(target === "musicxml" ? "gp" : "musicxml");
+    } catch (e) {
+      setError((e as Error).message);
+      return;
+    }
     setFile(f);
     setError("");
   };
@@ -154,8 +166,8 @@ export default function Home() {
         <CardHeader>
           <CardTitle>乐谱格式转换</CardTitle>
           <CardDescription>
-            支持 MIDI、Guitar Pro（gp / gpx / gp3-5）、MusicXML（mxl / musicxml /
-            xml）、alphaTab / LL / GP 时间线 JSON、alphaTex 互转，并可导出 PDF 与图片。
+            支持{!STATIC_MODE && " MIDI、"}Guitar Pro（gp / gpx / gp3-5）、MusicXML（mxl / musicxml /
+            xml）、alphaTab / LL / GP 时间线 JSON、alphaTex 互转{!STATIC_MODE && "，并可导出 PDF 与图片"}。
           </CardDescription>
         </CardHeader>
 
@@ -195,15 +207,17 @@ export default function Home() {
 
           <Row label="转换为">
             <Select value={target} onValueChange={setTarget}>
-              <SelectTrigger className="w-full">
+              <SelectTrigger className="w-full min-w-0">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {TARGETS.filter((t) => t.value !== inputExt).map((t) => (
-                  <SelectItem key={t.value} value={t.value}>
-                    {t.label}
-                  </SelectItem>
-                ))}
+                <SelectGroup>
+                  {TARGETS.filter((t) => t.value !== inputExt).map((t) => (
+                    <SelectItem key={t.value} value={t.value}>
+                      {t.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               </SelectContent>
             </Select>
           </Row>
@@ -395,7 +409,7 @@ export default function Home() {
           </Button>
           <p className="text-muted-foreground text-xs leading-relaxed">
             Guitar Pro 谱转 MusicXML / GP 时直接解析原文件，保留六线谱、调弦与弦位品格；
-            其余转换由 MuseScore 引擎完成。选择六线谱时，非 Guitar Pro
+            {STATIC_MODE ? "所有转换均在浏览器内完成。" : "其余转换由 MuseScore 引擎完成。"}选择六线谱时，非 Guitar Pro
             来源会自动推断调弦并指派弦位品格。不支持导出 gp3 / gp4 / gpx。
           </p>
         </CardFooter>

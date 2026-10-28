@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "bun scripts/dev.ts",
     "build": "tsc --noEmit && vite build",
+    "build:static": "VITE_STATIC_MODE=1 bun run build",
     "start": "bun server/index.ts",
     "verify": "bun scripts/verify.ts",
     "tauri": "tauri"

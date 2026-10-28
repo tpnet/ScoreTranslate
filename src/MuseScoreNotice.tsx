@@ -1,11 +1,20 @@
 import { useEffect, useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import type { MuseScoreStatus } from "@/lib/formats";
-import { getStatus } from "./platform";
+import { getStatus, STATIC_MODE } from "./platform";
 
 export function MuseScoreNotice() {
   const [status, setStatus] = useState<MuseScoreStatus | null>(null);
-  useEffect(() => { void getStatus().then(setStatus).catch(() => setStatus({ major: null, path: "MuseScore 4" })); }, []);
+  useEffect(() => {
+    if (!STATIC_MODE) void getStatus().then(setStatus).catch(() => setStatus({ major: null, path: "MuseScore 4" }));
+  }, []);
+  if (STATIC_MODE) return (
+    <Alert className="rounded-none border-x-0 border-t-0">
+      <AlertDescription>
+        静态模式：文件仅在浏览器内处理，不上传服务器。MIDI 输入及 MIDI / PDF / PNG / MSCZ 输出请使用本地 Web 或桌面版。
+      </AlertDescription>
+    </Alert>
+  );
   if (!status) return null;
   const { major, path } = status;
   return <>
