@@ -15,6 +15,7 @@ Desktop conversion runs locally. The full web version processes files on its com
 | Guitar Pro | `.gp` `.gpx` `.gp3` `.gp4` `.gp5` | `.gp` (GP7/8) `.gpx` (GP6) `.gp5` (GP5 v5.00) |
 | MusicXML | `.musicxml` `.xml` `.mxl` | `.musicxml` `.xml` `.mxl` |
 | MIDI | `.mid` `.midi` | `.mid` |
+| Capella | `.capx` | `.capx` (CapXML 5.3) |
 | JSON | LL raw song details, two-dimensional GP timelines, alphaTab score models | alphaTab score model `.json` |
 | alphaTex | `.atex` | `.atex` |
 | MuseScore / documents / images | — | `.mscz` `.pdf` `.png`, long PNG |
@@ -38,7 +39,7 @@ PNG returns an image for a single page and a ZIP for multiple pages. Long PNG st
 
 ### Online web app
 
-Open the [ScoreTranslate web app](https://scoretranslate.vercel.app/) with no installation. Files are converted inside your browser without uploads. It supports Guitar Pro (including GPX), MusicXML, JSON and alphaTex conversion, track selection and lyric merging. MIDI input and MIDI / PDF / PNG / MSCZ output require the desktop app or full web server.
+Open the [ScoreTranslate web app](https://scoretranslate.vercel.app/) with no installation. Files are converted inside your browser without uploads. It supports Guitar Pro (including GPX), MusicXML, JSON and alphaTex conversion, track selection and lyric merging, plus Capella (`.capx`) import and export. MIDI input and MIDI / PDF / PNG / MSCZ output require the desktop app or full web server.
 
 ### Desktop app
 
@@ -49,7 +50,7 @@ Download the appropriate file from [Releases](https://github.com/tpnet/ScoreTran
 | macOS Apple Silicon / Intel | DMG for the appropriate architecture; macOS 13 or later |
 | Windows x64 | `ScoreTranslate_<version>_x64-setup.exe` installer or `ScoreTranslate_<version>_x64-portable.exe`; the portable app requires an installed WebView2 Runtime |
 
-The desktop app needs neither Bun nor Node.js and starts no local HTTP server. **Install MuseScore 4 separately when needed.** Conversions between Guitar Pro / MusicXML / JSON / alphaTex and track listing work without it. MIDI input and MIDI / PDF / PNG / MSCZ output require MuseScore.
+The desktop app needs neither Bun nor Node.js and starts no local HTTP server. **Install MuseScore 4 separately when needed.** Conversions between Guitar Pro / MusicXML / JSON / alphaTex / Capella work without it, as does track listing. MIDI input and MIDI / PDF / PNG / MSCZ output require MuseScore.
 
 The app has no formal developer signing or notarization. If the OS blocks the first launch:
 
@@ -89,7 +90,7 @@ The repository's `vercel.json` configures a static Vite deployment. Import the G
 
 No environment variables, Bun server, or MuseScore installation are required. `build:static` sets `VITE_STATIC_MODE=1` at build time. Conversion and track listing use the existing Web Worker inside the browser without calling `/api/*`. Other static hosts can serve the same `dist/` output.
 
-Static mode supports conversion between Guitar Pro (gp / gpx / gp3–5), MusicXML (musicxml / xml / mxl), JSON, and alphaTex. Track selection, lyric merging, and song JSON tempo/octave options remain available. **MIDI input and MIDI / PDF / PNG (including long PNG) / MSCZ output are unavailable** and hidden in the UI. The 50 MB file limit still applies; practical capacity depends on browser and device memory.
+Static mode supports conversion between Guitar Pro (gp / gpx / gp3–5), MusicXML (musicxml / xml / mxl), JSON, alphaTex, and Capella (capx). Track selection, lyric merging, and song JSON tempo/octave options remain available. **MIDI input and MIDI / PDF / PNG (including long PNG) / MSCZ output are unavailable** and hidden in the UI. The 50 MB file limit still applies; practical capacity depends on browser and device memory.
 
 Preview the static build locally without a conversion API:
 
@@ -146,7 +147,7 @@ curl -f -O -J \
   http://localhost:3000/api/convert
 ```
 
-Supported `target` values: `mid`, `musicxml`, `xml`, `mxl`, `gp`, `gpx`, `gp5`, `json`, `atex`, `mscz`, `pdf`, `png`, `png-long`.
+Supported `target` values: `mid`, `musicxml`, `xml`, `mxl`, `gp`, `gpx`, `gp5`, `capx`, `json`, `atex`, `mscz`, `pdf`, `png`, `png-long`.
 
 Success returns a file stream. Read the filename from `Content-Disposition` or URL-decode the `X-Filename` header; multipage PNG returns a `.zip`. Failure returns a non-2xx status and JSON `{"error":"..."}`.
 
@@ -196,7 +197,7 @@ Desktop builds require [Rust](https://rustup.rs) and the platform's Tauri build 
 
 The `desktop` GitHub Actions workflow supports manual builds for macOS Apple Silicon, macOS Intel and Windows x64. Publishing a Release automatically builds and uploads installers and the Windows portable app. Manual runs only save Actions artifacts. Synchronize project version numbers before publishing and use a matching `v<version>` Release tag.
 
-Regression checks cover all output formats, track selection, song JSON / alphaTab JSON / alphaTex, direct MusicXML conversion and original XML preservation, MIDI bridging, multipage PNG and long images, GP5 / GPX readback through two independent parsers (including GPX start/end ticks, lyrics, time-signature changes and track selection), and invalid inputs. TAB → standard notation → TAB readback covers four, six and seven strings, custom tuning, capos and combined staves, with pitch checks through alphaTab and MuseScore. Direct conversion paths assert that MuseScore is never called. Checks use real files and conversion engines.
+Regression checks cover all output formats, track selection, song JSON / alphaTab JSON / alphaTex, direct MusicXML conversion and original XML preservation, MIDI bridging, Capella import and export readback, multipage PNG and long images, GP5 / GPX readback through two independent parsers (including GPX start/end ticks, lyrics, time-signature changes and track selection), and invalid inputs. TAB → standard notation → TAB readback covers four, six and seven strings, custom tuning, capos and combined staves, with pitch checks through alphaTab and MuseScore. Direct conversion paths assert that MuseScore is never called. Checks use real files and conversion engines.
 
 After converting a two-dimensional GP timeline to GP, run the dedicated readback check to compare pitches, start/end ticks, lyrics, chords, tuning and string/fret data. Leave track selection and lyric merging disabled when checking the complete score:
 
@@ -228,6 +229,7 @@ When PDF uses the original staff layout and MuseScore cannot render Guitar Pro d
 
 ## Known limitations
 
+- **Capella import and export** work without MuseScore for Guitar Pro, MusicXML, and other score formats. Export writes CapXML 5.3 in standard notation and preserves core pitches, rhythms, lyrics, voices, and key and time signatures. It omits TAB fingerings, original engraving, graphics and some performance marks. Percussion preserves drum sounds by MIDI key and retains rhythm. Original staff positions, noteheads, and techniques may differ. Alternate endings and unrepresentable durations produce an error. Import does not support transposing instruments or custom pitch maps.
 - **Legacy formats are input-only:** `.gp3` / `.gp4` cannot be exported. `.gp` output is GP7/8, `.gpx` is GP6, and `.gp5` is GP5 v5.00.
 - **GPX export limits:** multiple staves become separate tracks with `(1)`, `(2)` name suffixes to preserve their tuning and capo settings. UTF-8 titles, lyrics and chords are retained. The writer uses BCFS with BCFZ compression; each internal file is limited to 986 sectors (about 3.85 MiB uncompressed), with an explicit error above the limit. GP7/8 audio backing tracks, RSE sounds/effect chains and within-track sound changes are not retained. Playback has not been manually checked in the Guitar Pro 6 desktop app.
 - **GP5 has format and encoding limits:** the custom writer preserves notes, rhythms, ties, tuplets, dynamics, time/key signatures, repeats, tuning, capo position, and techniques including bends, hammer-ons/pull-offs, slides, harmonics, palm mutes and vibrato. Chord diagrams are not retained; effects GP5 cannot express are downgraded or skipped. Non-ASCII titles, lyrics and other text become `?`; use MusicXML / PDF / PNG for Chinese lyrics. MIDI or piano MusicXML exported to GP5 receives automatic tuning and string/fret assignments; out-of-range notes may be folded by octaves. The song JSON path instead fails if pitches would change.

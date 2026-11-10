@@ -15,6 +15,7 @@
 | Guitar Pro | `.gp` `.gpx` `.gp3` `.gp4` `.gp5` | `.gp`（GP7/8） `.gpx`（GP6） `.gp5`（GP5 v5.00） |
 | MusicXML | `.musicxml` `.xml` `.mxl` | `.musicxml` `.xml` `.mxl` |
 | MIDI | `.mid` `.midi` | `.mid` |
+| Capella | `.capx` | `.capx`（CapXML 5.3） |
 | JSON | LL 原始歌曲详情、二维 GP 时间线、alphaTab 乐谱模型 | alphaTab 乐谱模型 `.json` |
 | alphaTex | `.atex` | `.atex` |
 | MuseScore / 文档 / 图片 | — | `.mscz` `.pdf` `.png`、PNG 长图 |
@@ -38,7 +39,7 @@ PNG 单页返回图片，多页自动打包为 ZIP；PNG 长图将各页纵向�
 
 ### 在线网页版
 
-直接打开 [ScoreTranslate 网页版](https://scoretranslate.vercel.app/)，无需安装，文件在浏览器内转换，不上传服务器。支持 Guitar Pro（含 GPX）、MusicXML、JSON 与 alphaTex 互转、选轨和歌词并轨。MIDI 输入及 MIDI / PDF / PNG / MSCZ 输出请使用桌面版或完整 Web 服务。
+直接打开 [ScoreTranslate 网页版](https://scoretranslate.vercel.app/)，无需安装，文件在浏览器内转换，不上传服务器。支持 Guitar Pro（含 GPX）、MusicXML、JSON 与 alphaTex 互转、选轨和歌词并轨，也支持 Capella（`.capx`）导入和导出。MIDI 输入及 MIDI / PDF / PNG / MSCZ 输出请使用桌面版或完整 Web 服务。
 
 ### 桌面版
 
@@ -49,7 +50,7 @@ PNG 单页返回图片，多页自动打包为 ZIP；PNG 长图将各页纵向�
 | macOS Apple Silicon / Intel | 对应架构的 DMG，macOS 13 及以上 |
 | Windows x64 | `ScoreTranslate_<版本>_x64-setup.exe` 安装版，或 `ScoreTranslate_<版本>_x64-portable.exe` 免安装版；免安装版需系统已有 WebView2 Runtime |
 
-桌面版无需安装 Bun 或 Node.js，也不启动本地 HTTP 服务。**MuseScore 4 按转换需求单独安装**。未安装时，Guitar Pro / MusicXML / JSON / alphaTex 之间互转和读取音轨仍可用；MIDI 输入，以及 MIDI / PDF / PNG / MSCZ 输出需要 MuseScore。
+桌面版无需安装 Bun 或 Node.js，也不启动本地 HTTP 服务。**MuseScore 4 按转换需求单独安装**。未安装时，Guitar Pro / MusicXML / JSON / alphaTex / Capella 之间互转及读取音轨仍可用。MIDI 输入以及 MIDI / PDF / PNG / MSCZ 输出需要 MuseScore。
 
 应用未做正式开发者签名与公证。首次打开如被系统拦截：
 
@@ -89,7 +90,7 @@ Bun 同时提供 `dist/` 静态页面和转换 API，默认监听 `127.0.0.1:300
 
 无需配置环境变量、启动 Bun 服务或安装 MuseScore。`build:static` 在构建时设置 `VITE_STATIC_MODE=1`，转换与音轨读取复用浏览器 Web Worker，不请求 `/api/*`。其他静态托管平台也可部署这个命令生成的 `dist/`。
 
-静态版支持 Guitar Pro（gp / gpx / gp3–5）、MusicXML（musicxml / xml / mxl）、JSON、alphaTex 之间互转，保留选轨、歌词并轨及歌曲 JSON 的速度和八度设置。**MIDI 输入以及 MIDI / PDF / PNG（含长图）/ MSCZ 输出不可用**，页面会隐藏相关选项。文件上限仍为 50 MB，实际可处理大小受浏览器和设备内存限制。
+静态版支持 Guitar Pro（gp / gpx / gp3–5）、MusicXML（musicxml / xml / mxl）、JSON、alphaTex 和 Capella（capx）之间互转，保留选轨、歌词并轨及歌曲 JSON 的速度和八度设置。**MIDI 输入以及 MIDI / PDF / PNG（含长图）/ MSCZ 输出不可用**，页面会隐藏相关选项。文件上限仍为 50 MB，实际可处理大小受浏览器和设备内存限制。
 
 本地预览静态部署（仅启动静态文件服务，不启动转换 API）：
 
@@ -146,7 +147,7 @@ curl -f -O -J \
   http://localhost:3000/api/convert
 ```
 
-`target` 可选值：`mid`、`musicxml`、`xml`、`mxl`、`gp`、`gpx`、`gp5`、`json`、`atex`、`mscz`、`pdf`、`png`、`png-long`。
+`target` 可选值：`mid`、`musicxml`、`xml`、`mxl`、`gp`、`gpx`、`gp5`、`capx`、`json`、`atex`、`mscz`、`pdf`、`png`、`png-long`。
 
 成功返回文件流，文件名见 `Content-Disposition`，也可对 `X-Filename` 响应头进行 URL 解码获取；PNG 多页时实际返回 `.zip`。失败返回非 2xx 状态和 JSON `{"error":"..."}`。
 
@@ -196,7 +197,7 @@ bun tauri build          # 构建当前平台桌面包，需要 Rust 工具链
 
 `desktop` GitHub Actions 工作流支持手动构建 macOS Apple Silicon、macOS Intel 和 Windows x64 产物；发布 Release 时自动构建并上传安装包及 Windows 免安装版。手动运行只保存 Actions 产物。发布前同步更新项目版本号，Release 标签使用对应的 `v<版本>`。
 
-回归覆盖全部输出格式、选轨、歌曲 JSON / alphaTab JSON / alphaTex、MusicXML 直连与原文互转、MIDI 桥接、多页 PNG 与长图、GP5 / GPX 双解析器回读（GPX 额外比对起止 tick、歌词、变拍和选轨）及错误输入。TAB → 五线谱 → TAB 回读覆盖四/六/七弦、特殊调弦、变调夹和双谱表，并核对 alphaTab 与 MuseScore 读取的音高；直连路径断言不调用 MuseScore。使用真实文件与转换引擎。
+回归覆盖全部输出格式、选轨、歌曲 JSON / alphaTab JSON / alphaTex、MusicXML 直连与原文互转、MIDI 桥接、Capella 读写回读、多页 PNG 与长图、GP5 / GPX 双解析器回读（GPX 额外比对起止 tick、歌词、变拍和选轨）及错误输入。TAB → 五线谱 → TAB 回读覆盖四/六/七弦、特殊调弦、变调夹和双谱表，并核对 alphaTab 与 MuseScore 读取的音高；直连路径断言不调用 MuseScore。使用真实文件与转换引擎。
 
 二维 GP 时间线转 GP 后，还可运行专项回读，比较音高、起止 tick、歌词、和弦及调弦弦品；检查完整音轨时不要启用选轨或歌词并轨：
 
@@ -228,6 +229,7 @@ PDF 选择「跟随原谱」时，若 MuseScore 无法直接从 Guitar Pro 生�
 
 ## 已知限制
 
+- **Capella 读写**：`.capx` 与 Guitar Pro、MusicXML 等乐谱格式互转无需 MuseScore。导出为 CapXML 5.3 五线谱，保留基本音高、节奏、歌词、声部和调拍号。TAB 弦品、原谱排版、图形和部分演奏记号会省略。支持按 MIDI 键保留打击乐鼓件与节奏，原鼓谱的谱位、符头和特殊奏法可能不同。遇到反复跳房子或无法表示的时值会报错，导入暂不支持移调乐器或自定义音高映射。
 - **旧格式只读**：`.gp3` / `.gp4` 仅支持输入；`.gp` 输出为 GP7/8，`.gpx` 输出为 GP6，`.gp5` 输出为 GP5 v5.00。
 - **GPX 首版边界**：多谱表按谱表拆成独立音轨，名称增加 `(1)`、`(2)` 后缀，以保留各自调弦和变调夹；UTF-8 标题、歌词和和弦保留。使用 BCFS 容器及 BCFZ 压缩，每个内部文件上限 986 个扇区（约 3.85 MiB，按未压缩大小计），超限会明确报错。GP7/8 的音频伴奏、RSE 音色/效果链与轨内音色切换不保留；尚未在 Guitar Pro 6 桌面端人工试听。
 - **GP5 有格式与编码限制**：自研写出器保留音符、节奏、连音线、连音、力度、拍号调号、反复、调弦、变调夹及推弦、击勾弦、滑音、泛音、闷音、颤音等演奏效果；不保留和弦图，GP5 无法表达的效果会降级或跳过。非 ASCII 标题、歌词等文本降级为 `?`，中文歌词建议导出 MusicXML / PDF / PNG。MIDI 或钢琴 MusicXML 转 GP5 时会自动选择调弦并指派弦品，超出音域的音符可能按八度折叠；歌曲 JSON 路径会在音高改变时直接报错。

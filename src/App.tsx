@@ -35,6 +35,7 @@ const TARGETS = [
   { value: "gp", label: "Guitar Pro (.gp，GP7/8 可打开)" },
   { value: "gpx", label: "Guitar Pro 6 (.gpx)" },
   { value: "gp5", label: "Guitar Pro 5 (.gp5，GP5 及以上可打开)" },
+  { value: "capx", label: "Capella (.capx)" },
   { value: "json", label: "alphaTab JSON (.json)" },
   { value: "atex", label: "alphaTex (.atex)" },
   { value: "mscz", label: "MuseScore (.mscz)" },
@@ -58,6 +59,7 @@ const OPT_KEYS: Record<string, string[]> = {
   gp: ["mergeLyrics"],
   gpx: ["mergeLyrics"],
   gp5: ["mergeLyrics"],
+  capx: ["mergeLyrics"],
 };
 
 // 表单行：左侧固定标签 + 右侧控件
@@ -169,7 +171,7 @@ export default function Home() {
           <CardTitle>乐谱格式转换</CardTitle>
           <CardDescription>
             支持{!STATIC_MODE && " MIDI、"}Guitar Pro（gp / gpx / gp3-5）、MusicXML（mxl / musicxml /
-            xml）、alphaTab / LL / GP 时间线 JSON、alphaTex 互转{!STATIC_MODE && "，并可导出 PDF 与图片"}。
+            xml）、Capella（.capx）、alphaTab / LL / GP 时间线 JSON、alphaTex 互转{!STATIC_MODE && "，并可导出 PDF 与图片"}。
           </CardDescription>
         </CardHeader>
 
@@ -411,7 +413,7 @@ export default function Home() {
           </Button>
           <p className="text-muted-foreground text-xs leading-relaxed">
             Guitar Pro 谱转 MusicXML / GP 时直接解析原文件，保留六线谱、调弦与弦位品格；
-            {STATIC_MODE ? "所有转换均在浏览器内完成。" : "其余转换由 MuseScore 引擎完成。"}选择六线谱时，非 Guitar Pro
+            {STATIC_MODE ? "所有转换均在浏览器内完成。" : "MIDI / PDF / PNG / MSCZ 输出由 MuseScore 完成。"}选择六线谱时，非 Guitar Pro
             来源会自动推断调弦并指派弦位品格。不支持导出 gp3 / gp4。
           </p>
         </CardFooter>

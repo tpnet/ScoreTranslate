@@ -283,7 +283,7 @@ async function scoreFromAlphaTex(input: Uint8Array): Promise<model.Score> {
 }
 
 // 列出音轨名供前端勾选。下标与 ConvertOptions.tracks 一致：解析链路和转换时
-// 完全相同（GP / MusicXML 系直接解析，MIDI 经 MuseScore 桥接）
+// 完全相同（Capella 先转 MusicXML，MIDI 经 MuseScore 桥接）
 export async function listTracks(input: Uint8Array, inputExt: string, render: Render): Promise<string[]> {
   const alphaTab = await import("@coderline/alphatab");
   let score: model.Score;
@@ -293,7 +293,10 @@ export async function listTracks(input: Uint8Array, inputExt: string, render: Re
     score = await scoreFromAlphaTex(input);
   } else {
     let bytes = input;
-    if (!GP_INPUT_EXTS.includes(inputExt) && !XML_TARGETS.includes(inputExt)) {
+    if (inputExt === "capx") {
+      const { capxToMusicXml } = await import("./capx");
+      bytes = await capxToMusicXml(input, "");
+    } else if (!GP_INPUT_EXTS.includes(inputExt) && !XML_TARGETS.includes(inputExt)) {
       bytes = await render(input, { inputExt, target: "musicxml" }).catch(() => {
         throw new Error("读取音轨失败：MuseScore 未能解析该文件");
       });
@@ -315,6 +318,34 @@ export async function convertScore(
   options: ConvertOptions,
   render: Render,
 ): Promise<ConvertResult> {
+  if (inputExt === "capx") {
+    const { capxToMusicXml } = await import("./capx");
+    input = await capxToMusicXml(input, baseName);
+    inputExt = "musicxml";
+  }
+  if (target === "capx") {
+    let score: model.Score;
+    if (inputExt === "json") score = await scoreFromAlphaTabJson(input, options, baseName);
+    else if (inputExt === "atex") score = await scoreFromAlphaTex(input);
+    else {
+      const bytes = inputExt === "mid" || inputExt === "midi"
+        ? await render(input, { inputExt, target: "musicxml" })
+        : input;
+      const alphaTab = await import("@coderline/alphatab");
+      try {
+        score = alphaTab.importer.ScoreLoader.loadScoreFromBytes(bytes, new alphaTab.Settings());
+      } catch {
+        throw new Error("转换失败：无法解析该乐谱文件");
+      }
+    }
+    // 弱起小节的时长由全谱最长声部决定，须在选轨前读取。
+    const barLengths = score.masterBars.map(b => b.calculateDuration());
+    if (options.mergeLyrics) mergeLyricsAcrossTracks(score);
+    filterTracks(score, options.tracks);
+    const { exportCapx } = await import("./capx");
+    const data = await exportCapx(score, barLengths);
+    return { data, filename: `${baseName}.capx`, contentType: CONTENT_TYPES.capx };
+  }
   // JSON / alphaTex 的 XML 目标直接复用 Score，其余目标保留 .gp 桥接
   if (inputExt === "json" || inputExt === "atex") {
     const alphaTab = await import("@coderline/alphatab");

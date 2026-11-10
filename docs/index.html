@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <meta name="description" content="Guitar Pro、MusicXML、MIDI 与歌曲 JSON 格式转换，支持 PDF、PNG 导出。下载本地桌面版，或直接使用网页版。">
+  <meta name="description" content="Guitar Pro、MusicXML、Capella、MIDI 与歌曲 JSON 格式转换，支持 PDF、PNG 导出。下载本地桌面版，或直接使用网页版。">
   <meta name="theme-color" content="#f5f4ef">
   <title>ScoreTranslate — 让乐谱，自由流转</title>
   <style>
@@ -158,7 +158,7 @@
   <main id="main" class="wrap">
     <header class="hero">
       <div>
-        <p class="eyebrow">v0.4.0 · Open source · Sheet music converter</p>
+        <p class="eyebrow">v0.5.0 · Open source · Sheet music converter</p>
         <h1><span class="zh">让乐谱，<br><em>自由流转。</em></span><span class="en">Your music.<br><em>A new format.</em></span></h1>
         <p class="lead"><span class="zh">从 Guitar Pro 到 MusicXML，从 MIDI 到可分享的 PDF。把手中的乐谱，转换成下一步需要的格式。</span><span class="en">From Guitar Pro to MusicXML. From MIDI to a shareable PDF. Turn the score you have into the format you need next.</span></p>
         <div class="actions">
@@ -196,6 +196,7 @@
           <tbody>
             <tr><td>Guitar Pro</td><td><code>.gp</code><code>.gp5</code><code>.gp4</code><code>.gp3</code><code>.gpx</code></td><td><code>.gp</code> (GP7/8) <code>.gpx</code> (GP6) <code>.gp5</code></td></tr>
             <tr><td>MusicXML</td><td><code>.musicxml</code><code>.xml</code><code>.mxl</code></td><td><code>.musicxml</code><code>.xml</code><code>.mxl</code></td></tr>
+            <tr><td>Capella</td><td><code>.capx</code></td><td><code>.capx</code> (CapXML 5.3)</td></tr>
             <tr><td>MIDI</td><td><code>.mid</code><code>.midi</code></td><td><code>.mid</code></td></tr>
             <tr><td>JSON / alphaTex</td><td><code>.json</code><code>.atex</code></td><td><code>.json</code> (alphaTab) <code>.atex</code></td></tr>
             <tr><td><span class="zh">文档与图片</span><span class="en">Documents &amp; images</span></td><td>—</td><td><code>.mscz</code><code>.pdf</code><code>.png</code><span class="zh"> / PNG 长图</span><span class="en"> / long PNG</span></td></tr>
@@ -225,9 +226,9 @@
         <article class="start-card"><p class="eyebrow">Web / Static</p><h3><span class="zh">在浏览器里处理乐谱。</span><span class="en">Work in your browser.</span></h3><p><span class="zh">完整 Web 版：安装 Bun 与 MuseScore 4，获取源码后运行：</span><span class="en">Full web app: install Bun and MuseScore 4, then clone and run:</span></p><pre><code>git clone https://github.com/tpnet/ScoreTranslate.git
 cd ScoreTranslate
 bun install
-bun run dev</code></pre><p class="small"><span class="zh">打开 <a href="http://localhost:3000">localhost:3000</a>。Web 文件由部署服务器处理；本机部署时文件留在本机。</span><span class="en">Open <a href="http://localhost:3000">localhost:3000</a>. Files are processed by your server; hosting locally keeps them on your machine.</span></p><p class="small"><span class="zh">纯静态部署：运行 <code>bun run build:static</code>，将 <code>dist/</code> 部署到 Vercel 等平台。Guitar Pro（含 GPX）、MusicXML、JSON、alphaTex 在浏览器内转换，无需 MuseScore，也不上传文件；MIDI 输入及 MIDI / PDF / PNG / MSCZ 输出请使用完整 Web 或桌面版。</span><span class="en">Static deployment: run <code>bun run build:static</code> and deploy <code>dist/</code> to Vercel or another static host. Guitar Pro (including GPX), MusicXML, JSON and alphaTex convert in the browser, without MuseScore or uploads. MIDI input and MIDI / PDF / PNG / MSCZ output require the full web or desktop app.</span></p><a class="text-link doc-link" href="https://github.com/tpnet/ScoreTranslate/blob/main/README.md"><span class="zh">部署说明与 HTTP 接口 ↗</span><span class="en">Deployment &amp; HTTP API docs ↗</span></a></article>
+bun run dev</code></pre><p class="small"><span class="zh">打开 <a href="http://localhost:3000">localhost:3000</a>。Web 文件由部署服务器处理；本机部署时文件留在本机。</span><span class="en">Open <a href="http://localhost:3000">localhost:3000</a>. Files are processed by your server; hosting locally keeps them on your machine.</span></p><p class="small"><span class="zh">纯静态部署：运行 <code>bun run build:static</code>，将 <code>dist/</code> 部署到 Vercel 等平台。Guitar Pro（含 GPX）、MusicXML、Capella、JSON、alphaTex 在浏览器内转换，无需 MuseScore，也不上传文件；MIDI 输入及 MIDI / PDF / PNG / MSCZ 输出请使用完整 Web 或桌面版。</span><span class="en">Static deployment: run <code>bun run build:static</code> and deploy <code>dist/</code> to Vercel or another static host. Guitar Pro (including GPX), MusicXML, Capella, JSON and alphaTex convert in the browser, without MuseScore or uploads. MIDI input and MIDI / PDF / PNG / MSCZ output require the full web or desktop app.</span></p><a class="text-link doc-link" href="https://github.com/tpnet/ScoreTranslate/blob/main/README.md"><span class="zh">部署说明与 HTTP 接口 ↗</span><span class="en">Deployment &amp; HTTP API docs ↗</span></a></article>
       </div>
-      <div class="engine-note"><strong>MuseScore 4 + alphaTab</strong><p><span class="zh">MuseScore 4 需<a href="https://musescore.org">单独安装</a>。未安装时，Guitar Pro / MusicXML / JSON / alphaTex 之间互转和读取音轨仍可用；MIDI 输入及 MIDI / PDF / PNG / MSCZ 输出需要它。非默认安装路径可用 <code>MSCORE_PATH</code> 指定。</span><span class="en">Install <a href="https://musescore.org">MuseScore 4 separately</a>. Without it, Guitar Pro / MusicXML / JSON / alphaTex conversions and track listing still work. MIDI input and MIDI / PDF / PNG / MSCZ output require it. Set <code>MSCORE_PATH</code> for a custom install location.</span></p></div>
+      <div class="engine-note"><strong>MuseScore 4 + alphaTab</strong><p><span class="zh">MuseScore 4 需<a href="https://musescore.org">单独安装</a>。未安装时，Guitar Pro / MusicXML / Capella / JSON / alphaTex 之间互转和读取音轨仍可用；MIDI 输入及 MIDI / PDF / PNG / MSCZ 输出需要它。非默认安装路径可用 <code>MSCORE_PATH</code> 指定。</span><span class="en">Install <a href="https://musescore.org">MuseScore 4 separately</a>. Without it, Guitar Pro / MusicXML / Capella / JSON / alphaTex conversions and track listing still work. MIDI input and MIDI / PDF / PNG / MSCZ output require it. Set <code>MSCORE_PATH</code> for a custom install location.</span></p></div>
     </section>
 
     <section class="faq" aria-labelledby="faq-title">
@@ -253,7 +254,7 @@ bun run dev</code></pre><p class="small"><span class="zh">打开 <a href="http:/
       button.setAttribute('aria-label', chinese ? 'Switch to English' : '切换到简体中文');
       document.title = chinese ? 'ScoreTranslate — 让乐谱，自由流转' : 'ScoreTranslate — Keep your music moving';
       document.querySelector('meta[name="description"]').content = chinese
-        ? 'Guitar Pro、MusicXML、MIDI 与歌曲 JSON 格式转换，支持 PDF、PNG 导出。下载本地桌面版，或直接使用网页版。'
+        ? 'Guitar Pro、MusicXML、Capella、MIDI 与歌曲 JSON 格式转换，支持 PDF、PNG 导出。下载本地桌面版，或直接使用网页版。'
         : 'Convert Guitar Pro, MusicXML, MIDI and song JSON. Export PDF and PNG. Download the local desktop app or use the web app online.';
       document.querySelectorAll('.doc-link').forEach(link => {
         link.href = `https://github.com/tpnet/ScoreTranslate/blob/main/README${chinese ? '' : '.en'}.md`;

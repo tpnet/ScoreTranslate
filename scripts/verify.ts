@@ -5,7 +5,7 @@ import path from "node:path";
 import * as alphaTab from "@coderline/alphatab";
 import JSZip from "jszip";
 import { PNG } from "pngjs";
-import { MAX_SIZE, OUTPUT_EXTS, type OutputExt, type Render } from "../lib/formats";
+import { MAX_SIZE, OUTPUT_EXTS, STATIC_INPUT_EXTS, STATIC_OUTPUT_EXTS, type OutputExt, type Render } from "../lib/formats";
 import { convertScore, listTracks } from "../lib/convert";
 import { scoreToMusicXml } from "../lib/gp-to-musicxml";
 import { exportGpx } from "../lib/gpx-writer";
@@ -101,6 +101,44 @@ try {
   passed("音轨列表与下标");
 
   const noMuseScore: Render = async () => { throw new Error("直连路径不应调用 MuseScore"); };
+  const capxArchive = new JSZip();
+  capxArchive.file("score.xml",await readFile(new URL("./fixtures/two-tracks.capx.xml",import.meta.url)));
+  const capx = await capxArchive.generateAsync({type:"uint8array",compression:"DEFLATE"});
+  const capxForm = new FormData();
+  capxForm.set("file",new File([capx as BlobPart],"双轨.CAPX"));
+  const capxTracks = native ? await listTracks(capx,"capx",nativeRender)
+    : (await (await fetch(`${url}/api/tracks`,{method:"POST",body:capxForm})).json()).tracks;
+  assert.deepEqual(capxTracks,["Flute","Violin"]);
+  assert(STATIC_INPUT_EXTS.includes("capx"));
+  assert.deepEqual(await listTracks(capx,"capx",noMuseScore),capxTracks);
+  const capxXml = await convert(capx,"双轨.capx","musicxml");
+  assert.equal(capxXml.filename,"双轨.musicxml");
+  const capxScore = load(capxXml.bytes);
+  assert.deepEqual(pitches(capxScore),[[60,67,62,63,63],[64]]);
+  assert.equal(capxScore.tempo,96);
+  const flute = capxScore.tracks[0].staves[0].bars[0].voices[0].beats;
+  assert.deepEqual(flute.map(b=>[b.absolutePlaybackStart,b.playbackDuration]),[[0,640],[640,640],[1280,640],[1920,1920]]);
+  assert.equal(flute[0].lyrics?.[0],"春 & 光");
+  assert(flute[3].notes[0].isTieDestination);
+  const capxRoundtrip = await convertScore(capxXml.bytes,"musicxml","capx","双轨",{},noMuseScore);
+  assert.equal(capxRoundtrip.filename,"双轨.capx");
+  assert(STATIC_INPUT_EXTS.includes("capx") && STATIC_OUTPUT_EXTS.includes("capx"));
+  const capxReadback = load((await convertScore(capxRoundtrip.data,"capx","musicxml","回读",{},noMuseScore)).data);
+  assert.deepEqual(timeline(capxReadback),timeline(capxScore));
+  assert.equal(capxReadback.tempo,96);
+  assert(capxReadback.tracks[0].staves[0].bars[0].voices[0].beats[3].notes[0].isTieDestination);
+  const direct = await convertScore(capx,"capx","gp","双轨",{tracks:[1]},noMuseScore);
+  assert.deepEqual(pitches(load(direct.data)),[[64]]);
+  await assert.rejects(convertScore(fixture,"capx","musicxml","invalid",{},noMuseScore),/不是有效的 ZIP/);
+  const capxTab = await convert(capx,"双轨.capx","mxl",{tracks:"1",staffMode:"tab"});
+  assert.deepEqual(pitches(load(capxTab.bytes)),[[64]]);
+  assert(load(capxTab.bytes).tracks[0].staves[0].isStringed);
+  const capxGp = await convert(capx,"双轨.capx","gp5",{tracks:"1"});
+  assert.deepEqual(pitches(load(capxGp.bytes)),[[64]]);
+  const capxPdf = await convert(capx,"双轨.capx","pdf");
+  assert.equal(new TextDecoder().decode(capxPdf.bytes.slice(0,4)),"%PDF");
+  passed("Capella CAPX 免 MuseScore 读写、连音歌词回读、选轨、TAB 与 PDF");
+
   const tab = await convertScore(fixture,"musicxml","musicxml","tab",{staffMode:"tab",mergeLyrics:true},noMuseScore);
   const custom = load(tab.data);
   for (const track of custom.tracks) for (const staff of track.staves) {
@@ -178,6 +216,14 @@ try {
     outputs.set(target,bytes);
     assert(filename.startsWith("测试."));
     if (["musicxml","xml","mxl","gp","gpx","gp5"].includes(target)) assert.equal(load(bytes).tracks.length,2);
+    else if (target === "capx") {
+      const readback = load((await convertScore(bytes,"capx","musicxml","回读",{},noMuseScore)).data);
+      assert.deepEqual(timeline(readback),timeline(load(gp)));
+      if (!native) {
+        const independent = load(await render(bytes,{inputExt:"capx",target:"musicxml"}));
+        assert.deepEqual(timeline(independent),timeline(load(gp)));
+      }
+    }
     else if (target === "json") assert(JSON.parse(new TextDecoder().decode(bytes)));
     else if (target === "atex") assert(new TextDecoder().decode(bytes).includes("\\track"));
     else if (target === "pdf") assert.equal(new TextDecoder().decode(bytes.slice(0,4)),"%PDF");
@@ -191,6 +237,10 @@ try {
   for (const target of OUTPUT_EXTS) {
     const {bytes} = await convert(gp,"selected.gp",target,{tracks:"1",staffMode:"tab",dpi:"50",mergeLyrics:"1"});
     if (["musicxml","xml","mxl","gp","gpx","gp5"].includes(target)) assert.equal(load(bytes).tracks.length,1);
+    if (target === "capx") {
+      assert.deepEqual(await listTracks(bytes,"capx",noMuseScore),["Bass"]);
+      assert.deepEqual(pitches(load((await convertScore(bytes,"capx","musicxml","回读",{},noMuseScore)).data)),[pitches(load(gp))[1]]);
+    }
     if (target === "atex") {
       const importer = new alphaTab.importer.AlphaTexImporter();
       importer.initFromString(new TextDecoder().decode(bytes),settings);
@@ -390,6 +440,18 @@ try {
   const drumData = await exportGpx(drums);
   assert.deepEqual(pitches(load(drumData)),drumPitches);
   assert.deepEqual(pitches(load(await (native ? nativeRender : render)(drumData,{inputExt:"gpx",target:"musicxml"}))),drumPitches);
+  const drumCapx = await convert(drumData,"drums.gpx","capx");
+  const drumCapxXml = await (await JSZip.loadAsync(drumCapx.bytes)).file("score.xml")!.async("string");
+  assert.match(drumCapxXml,/<sound [^>]*percussion="true"/);
+  const drumReadback = load((await convertScore(drumCapx.bytes,"capx","musicxml","drums",{},noMuseScore)).data);
+  assert.equal(drumReadback.tracks[0].name,"Drums");
+  assert(drumReadback.tracks[0].staves[0].isPercussion);
+  assert.deepEqual(pitches(drumReadback),drumPitches);
+  assert.deepEqual(
+    timeline(drumReadback).map(events=>events.map(event=>JSON.parse(event).slice(0,2))),
+    timeline(drums).map(events=>events.map(event=>JSON.parse(event).slice(0,2))),
+  );
+  passed("Capella CAPX 鼓轨导出并回读鼓件与时值");
   const tooLarge = load(fixture);
   tooLarge.title = "大".repeat(1_400_000);
   await assert.rejects(exportGpx(tooLarge),/GPX 内部文件超过/);

@@ -31,7 +31,7 @@ export function MuseScoreNotice() {
           <Alert variant="destructive" className="rounded-none border-x-0 border-t-0">
             <AlertDescription className="block">
               未在 <code className="font-mono">{path}</code> 检测到 MuseScore 4。Guitar Pro / JSON / alphaTex
-              之间及转 MusicXML 仍可用，其余转换需要安装 MuseScore。请从 musescore.org 安装（macOS 也可{" "}
+              、MusicXML 与 Capella（.capx）之间的转换仍可用。请从 musescore.org 安装（macOS 也可{" "}
               <code className="font-mono">brew install --cask musescore</code>
               ）；装在别处时，用环境变量 <code className="font-mono">MSCORE_PATH</code> 指向其可执行文件。
             </AlertDescription>
